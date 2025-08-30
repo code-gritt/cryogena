@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Menu, X, LogOut } from "lucide-react";
 import logo from "../assets/logo.png";
 import { navItems } from "../constants";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import useUserStore from "../../store/userStore";
 
 const Navbar = () => {
@@ -22,10 +22,14 @@ const Navbar = () => {
       <div className="container px-4 mx-auto relative lg:text-sm">
         {/* Desktop Navbar */}
         <div className="flex justify-between items-center">
-          <div className="flex items-center flex-shrink-0">
-            <img className="h-10 w-10 mr-2" src={logo} alt="Logo" />
-            <span className="text-xl tracking-tight text-white">Cryogena</span>
-          </div>
+          <Link href="/">
+            <div className="flex items-center flex-shrink-0">
+              <img className="h-10 w-10 mr-2" src={logo} alt="Logo" />
+              <span className="text-xl tracking-tight text-white">
+                Cryogena
+              </span>
+            </div>
+          </Link>
 
           <ul className="hidden lg:flex ml-14 space-x-12">
             {navItems.map((item, index) => (
