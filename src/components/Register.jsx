@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, Mail, Lock } from "lucide-react";
-import SwirlingEffectSpinner from "./loader";
 import useUserStore from "../../store/userStore";
 
 const Register = () => {
@@ -68,8 +67,8 @@ const Register = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-900">
       {loading && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-50">
-          <SwirlingEffectSpinner />
+        <div className="fixed inset-0 bg-opacity-10 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-600"></div>
         </div>
       )}
       <div className="bg-neutral-800 p-8 rounded-lg shadow-lg w-full max-w-md">
