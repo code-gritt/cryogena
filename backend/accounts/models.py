@@ -42,5 +42,6 @@ class File(models.Model):
     size = models.IntegerField(default=0)  # in bytes
     # e.g., 'image', 'pdf', 'doc', 'folder', 'mp3', 'video'
     file_type = models.CharField(max_length=50)
-    file = models.FileField(upload_to='uploads/', null=True, blank=True)
+    file = models.FileField(
+        upload_to='uploads/%Y/%m/%d/', null=True, blank=True)
     is_deleted = models.BooleanField(default=False)  # For bin
