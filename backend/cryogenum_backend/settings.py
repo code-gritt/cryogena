@@ -39,10 +39,19 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.sites",  # Required for django-allauth
 
     # Third-party
     "corsheaders",
     "graphene_django",
+    "rest_framework",
+    "rest_framework.authtoken",  # Required for dj-rest-auth token support
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
+    "dj_rest_auth",
+    "dj_rest_auth.registration",
 
     # Local apps
     "accounts",
@@ -57,7 +66,9 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    # must come before allauth middleware
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "allauth.account.middleware.AccountMiddleware",             # <-- here
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -113,6 +124,7 @@ AUTH_PASSWORD_VALIDATORS = [
 AUTHENTICATION_BACKENDS = [
     "accounts.auth_backends.EmailBackend",
     "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
 ]
 
 # --------------------------------------
@@ -143,15 +155,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "https://cryogena-backend.onrender.com",
-    "https://cryogena.vercel.app/"
+    "https://cryogena.vercel.app",
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "https://cryogena-backend.onrender.com",
-    "https://cryogena.vercel.app/"
-]
-
+CORS_ALLOWED_ORIGINS = CSRF_TRUSTED_ORIGINS
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = ["GET", "POST", "OPTIONS"]
 CORS_ALLOW_HEADERS = ["Content-Type", "X-CSRFToken", "Cookie", "Authorization"]
@@ -174,3 +181,28 @@ GRAPHENE = {
     "SCHEMA": "cryogenum_backend.schema.schema",
     "MIDDLEWARE": [],
 }
+
+# --------------------------------------
+# DJANGO-ALLAUTH SETTINGS
+# --------------------------------------
+SITE_ID = 1
+
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "APP": {
+            "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
+            "secret": os.getenv("GOOGLE_CLIENT_SECRET", ""),
+            "key": "",
+        },
+        "SCOPE": ["profile", "email"],
+        "AUTH_PARAMS": {"access_type": "online"},
+    }
+}
+
+# --------------------------------------
+# DJ-REST-AUTH SETTINGS
+# --------------------------------------
+REST_USE_JWT = True
+JWT_AUTH_COOKIE = "cryogena-auth"
+JWT_AUTH_REFRESH_COOKIE = "cryogena-refresh"
+JWT_AUTH_HTTPONLY = True
