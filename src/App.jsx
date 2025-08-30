@@ -46,6 +46,7 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/workspace" element={<Workspace />} />
+        <Route path="/workspace/:folderId" element={<Workspace />} />
         <Route
           path="/pricing"
           element={<div>Pricing (To be implemented)</div>}

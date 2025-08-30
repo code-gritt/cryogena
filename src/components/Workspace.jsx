@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   LogOut,
   Trash2,
@@ -36,6 +36,7 @@ const Workspace = () => {
   });
   const { user, token, clearUser } = useUserStore();
   const navigate = useNavigate();
+  const { folderId } = useParams();
   const mainRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -51,51 +52,85 @@ const Workspace = () => {
     setError("");
 
     try {
-      // Files
-      const filesResponse = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          query: `
-            query {
-              userFiles {
-                id
-                name
-                ownerAvatar
-                createdAt
-                size
-                fileType
-                fileUrl
+      if (folderId) {
+        // Fetch folder-specific contents
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            query: `
+              query ($folderId: ID!) {
+                folderContents(folderId: $folderId) {
+                  files {
+                    id
+                    name
+                    ownerAvatar
+                    createdAt
+                    size
+                    fileType
+                    fileUrl
+                  }
+                  folders {
+                    id
+                    name
+                    createdAt
+                  }
+                }
               }
-            }
-          `,
-        }),
-      });
-      const { data: filesData, errors: filesErrors } =
-        await filesResponse.json();
-      if (filesErrors) throw new Error(filesErrors[0].message);
-      setFiles(filesData.userFiles);
+            `,
+            variables: { folderId },
+          }),
+        });
+        const { data, errors } = await response.json();
+        if (errors) throw new Error(errors[0].message);
+        setFiles(data.folderContents.files);
+        setFolders(data.folderContents.folders);
+      } else {
+        // Fetch root-level files and folders
+        const filesResponse = await fetch(endpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            query: `
+              query {
+                userFiles {
+                  id
+                  name
+                  ownerAvatar
+                  createdAt
+                  size
+                  fileType
+                  fileUrl
+                }
+              }
+            `,
+          }),
+        });
+        const { data: filesData, errors: filesErrors } =
+          await filesResponse.json();
+        if (filesErrors) throw new Error(filesErrors[0].message);
+        setFiles(filesData.userFiles);
 
-      // Folders
-      const foldersResponse = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          query: `
-            query {
-              userFolders {
-                id
-                name
-                createdAt
+        const foldersResponse = await fetch(endpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            query: `
+              query {
+                userFolders {
+                  id
+                  name
+                  createdAt
+                }
               }
-            }
-          `,
-        }),
-      });
-      const { data: foldersData, errors: foldersErrors } =
-        await foldersResponse.json();
-      if (foldersErrors) throw new Error(foldersErrors[0].message);
-      setFolders(foldersData.userFolders);
+            `,
+          }),
+        });
+        const { data: foldersData, errors: foldersErrors } =
+          await foldersResponse.json();
+        if (foldersErrors) throw new Error(foldersErrors[0].message);
+        setFolders(foldersData.userFolders);
+      }
     } catch (err) {
       setError(err.message || "Something went wrong.");
     } finally {
@@ -109,7 +144,12 @@ const Workspace = () => {
       return;
     }
     fetchWorkspaceData();
-  }, [user, token, navigate]);
+  }, [user, token, navigate, folderId]);
+
+  // Handle double-click on folder
+  const handleFolderDoubleClick = (folderId) => {
+    navigate(`/workspace/${folderId}`);
+  };
 
   // Handle right-click context menu
   const handleContextMenu = (e) => {
@@ -148,8 +188,8 @@ const Workspace = () => {
         headers,
         body: JSON.stringify({
           query: `
-            mutation ($name: String!) {
-              createFolder(name: $name) {
+            mutation ($name: String!, $parentId: ID) {
+              createFolder(name: $name, parentId: $parentId) {
                 folder {
                   id
                   name
@@ -158,7 +198,7 @@ const Workspace = () => {
               }
             }
           `,
-          variables: { name: newFolderName },
+          variables: { name: newFolderName, parentId: folderId || null },
         }),
       });
       const { data, errors } = await response.json();
@@ -177,7 +217,7 @@ const Workspace = () => {
   };
 
   // Upload Files
-  const handleUpload = async (files, folderId = null) => {
+  const handleUpload = async (files, uploadFolderId = null) => {
     if (!files.length) {
       toast.error("Please select files to upload.");
       return;
@@ -195,7 +235,10 @@ const Workspace = () => {
             }
           }
         `,
-        variables: { files: new Array(files.length).fill(null), folderId },
+        variables: {
+          files: new Array(files.length).fill(null),
+          folderId: uploadFolderId || selectedFolderId || folderId,
+        },
       };
       formData.append("operations", JSON.stringify(operations));
       const map = {};
@@ -236,12 +279,12 @@ const Workspace = () => {
   // Handle modal submission (folder creation or file upload)
   const handleModalSubmit = async () => {
     if (newFolderName.trim()) {
-      const folderId = await handleCreateFolder();
-      if (folderId && selectedFiles.length) {
-        await handleUpload(selectedFiles, folderId);
+      const newFolderId = await handleCreateFolder();
+      if (newFolderId && selectedFiles.length) {
+        await handleUpload(selectedFiles, newFolderId);
       }
     } else if (selectedFiles.length) {
-      await handleUpload(selectedFiles, selectedFolderId);
+      await handleUpload(selectedFiles);
     } else {
       toast.error("Please select files or enter a folder name.");
     }
@@ -367,7 +410,7 @@ const Workspace = () => {
       >
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-white">
-            Workspace
+            {folderId ? `Folder Contents` : "Workspace"}
           </h1>
           <button
             onClick={() => setIsModalOpen(true)}
@@ -382,7 +425,8 @@ const Workspace = () => {
           {folders.map((folder) => (
             <div
               key={folder.id}
-              className="relative bg-neutral-800 p-4 rounded-lg text-center"
+              className="relative bg-neutral-800 p-4 rounded-lg text-center cursor-pointer"
+              onDoubleClick={() => handleFolderDoubleClick(folder.id)}
             >
               <Folder size={40} className="text-orange-500 mx-auto mb-2" />
               <p className="text-white text-sm truncate">{folder.name}</p>
