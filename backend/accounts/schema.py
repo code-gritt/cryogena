@@ -79,23 +79,30 @@ class GoogleLoginMutation(graphene.Mutation):
     token = graphene.String()
 
     def mutate(self, info, access_token):
-        factory = RequestFactory()
-        request = factory.post("/accounts/google/login/")
-        request.data = {"access_token": access_token}
-        request.user = None
-        request.META = info.context.META
-        request.COOKIES = info.context.COOKIES
+        # Verify the token with Google
+        response = requests.get(
+            "https://oauth2.googleapis.com/tokeninfo",
+            params={"id_token": access_token}
+        )
+        data = response.json()
 
-        view = GoogleLogin.as_view()
-        response = view(request)
+        if "email" not in data:
+            raise Exception("Invalid Google token")
 
-        if response.status_code != 200:
-            raise Exception(f"Google login failed: {response.data}")
+        email = data["email"]
+        username = data.get("name") or email.split("@")[0]
 
-        user = request.user or response.data.get("user")
-        token = get_tokens_for_user(user)["access"]
+        # Get or create the user
+        user, created = CustomUser.objects.get_or_create(
+            email=email,
+            defaults={"username": username}
+        )
+
+        # Generate JWT token
+        refresh = RefreshToken.for_user(user)
+        token = str(refresh.access_token)
+
         return GoogleLoginMutation(user=user, token=token)
-
 # -------------------------
 # GraphQL Mutation & Query
 # -------------------------
