@@ -115,7 +115,7 @@ const Register = () => {
       <div className="min-h-screen flex items-center justify-center bg-neutral-900">
         {loading && (
           <div className="fixed inset-0 bg-opacity-10 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-[#F65003]"></div>
           </div>
         )}
         <div className="bg-neutral-800 p-8 rounded-lg shadow-lg w-full max-w-md">

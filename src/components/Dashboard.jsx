@@ -28,7 +28,7 @@ const Dashboard = () => {
     mp3sCount: 0,
     videosCount: 0,
     totalStorageUsed: 0,
-    storageLimit: 1, // Avoid divide by zero
+    storageLimit: 1,
   });
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,7 +36,6 @@ const Dashboard = () => {
   const { user, token, clearUser } = useUserStore();
   const navigate = useNavigate();
 
-  // Fetch Dashboard Data
   useEffect(() => {
     if (!user || !token) {
       navigate("/login");
@@ -51,7 +50,7 @@ const Dashboard = () => {
         const endpoint = "https://cryogena-backend.onrender.com/graphql/";
         const headers = {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`, // Include token
+          Authorization: `Bearer ${token}`,
         };
 
         // Fetch stats
@@ -114,17 +113,14 @@ const Dashboard = () => {
     fetchDashboardData();
   }, [user, token, navigate]);
 
-  // Logout handler
   const handleLogout = () => {
     clearUser();
     navigate("/login");
   };
 
-  // Storage progress
   const progress = (stats.totalStorageUsed / stats.storageLimit) * 100;
   const isFull = progress >= 100;
 
-  // TanStack v8 columns
   const columns = [
     { accessorKey: "id", header: "ID" },
     { accessorKey: "name", header: "Uploaded File Name" },
@@ -164,31 +160,33 @@ const Dashboard = () => {
     },
   ];
 
-  // Table instance
   const table = useReactTable({
     data: files,
     columns,
     getCoreRowModel: getCoreRowModel(),
   });
 
-  // Render states
-  if (loading)
+  // Loader Overlay
+  if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen text-white">
-        Loading...
+      <div className="fixed inset-0 bg-opacity-10 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-[#F65003]"></div>
       </div>
     );
-  if (error)
+  }
+
+  if (error) {
     return (
       <div className="flex justify-center items-center h-screen text-red-500">
         Error: {error}
       </div>
     );
+  }
 
   return (
-    <div className="flex min-h-screen bg-neutral-900">
+    <div className="flex flex-col md:flex-row min-h-screen bg-neutral-900">
       {/* Sidebar */}
-      <aside className="w-64 bg-neutral-800 p-4 flex flex-col space-y-4">
+      <aside className="w-full md:w-64 bg-neutral-800 p-4 flex flex-col space-y-4">
         <a
           href="/workspace"
           className="flex items-center text-white hover:text-orange-500"
@@ -232,46 +230,48 @@ const Dashboard = () => {
       </aside>
 
       {/* Main Section */}
-      <main className="flex-1 p-8">
-        <h1 className="text-3xl font-bold text-white mb-6">Dashboard</h1>
+      <main className="flex-1 p-4 md:p-8">
+        <h1 className="text-2xl md:text-3xl font-bold text-white mb-6">
+          Dashboard
+        </h1>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
           <StatCard
-            icon={<Image size={32} />}
+            icon={<Image size={28} />}
             label="Images"
             value={stats.imagesCount}
           />
           <StatCard
-            icon={<FileText size={32} />}
-            label="Documents/PDFs"
+            icon={<FileText size={28} />}
+            label="Docs/PDFs"
             value={stats.pdfsCount + stats.docsCount}
           />
           <StatCard
-            icon={<Folder size={32} />}
+            icon={<Folder size={28} />}
             label="Folders"
             value={stats.foldersCount}
           />
           <StatCard
-            icon={<Music size={32} />}
-            label="MP3 Audio"
+            icon={<Music size={28} />}
+            label="MP3"
             value={stats.mp3sCount}
           />
           <StatCard
-            icon={<Video size={32} />}
+            icon={<Video size={28} />}
             label="Videos"
             value={stats.videosCount}
           />
         </div>
 
         {/* Files Table */}
-        <div className="bg-neutral-800 rounded-lg overflow-hidden">
-          <table className="w-full text-white">
+        <div className="overflow-x-auto">
+          <table className="w-full text-white text-sm md:text-base">
             <thead className="bg-neutral-700">
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
-                    <th key={header.id} className="p-4 text-left">
+                    <th key={header.id} className="p-2 md:p-4 text-left">
                       {header.isPlaceholder
                         ? null
                         : flexRender(
@@ -287,7 +287,7 @@ const Dashboard = () => {
               {table.getRowModel().rows.map((row) => (
                 <tr key={row.id} className="border-b border-neutral-700">
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="p-4">
+                    <td key={cell.id} className="p-2 md:p-4">
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -304,12 +304,12 @@ const Dashboard = () => {
   );
 };
 
-// Reusable stat card
+// Reusable StatCard
 const StatCard = ({ icon, label, value }) => (
-  <div className="bg-neutral-800 p-4 rounded-lg text-center">
-    <div className="text-orange-500 mx-auto mb-2">{icon}</div>
-    <p className="text-white font-bold">{value}</p>
-    <p className="text-neutral-400">{label}</p>
+  <div className="bg-neutral-800 p-3 md:p-4 rounded-lg text-center">
+    <div className="text-orange-500 mx-auto mb-1 md:mb-2">{icon}</div>
+    <p className="text-white font-bold text-lg">{value}</p>
+    <p className="text-neutral-400 text-sm">{label}</p>
   </div>
 );
 
