@@ -6,6 +6,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from dj_rest_auth.registration.views import SocialLoginView
 from django.test import RequestFactory
+from .views import GoogleLogin
 
 
 # -------------------------
@@ -78,34 +79,28 @@ class GoogleLoginMutation(graphene.Mutation):
     token = graphene.String()
 
     def mutate(self, info, access_token):
-        """
-        Perform Google OAuth login using dj-rest-auth SocialLoginView.
-        """
-        # Create a fake Django request object
         factory = RequestFactory()
         request = factory.post("/accounts/google/login/")
         request.data = {"access_token": access_token}
         request.user = None
-        request.META = info.context.META  # pass headers from original request
+        request.META = info.context.META
         request.COOKIES = info.context.COOKIES
 
-        # Use dj-rest-auth SocialLoginView with Google adapter
-        view = SocialLoginView.as_view(adapter_class=GoogleOAuth2Adapter)
+        view = GoogleLogin.as_view()
         response = view(request)
 
         if response.status_code != 200:
             raise Exception(f"Google login failed: {response.data}")
 
-        # Retrieve user instance
         user = request.user or response.data.get("user")
         token = get_tokens_for_user(user)["access"]
-
         return GoogleLoginMutation(user=user, token=token)
-
 
 # -------------------------
 # GraphQL Mutation & Query
 # -------------------------
+
+
 class Mutation(graphene.ObjectType):
     register = RegisterMutation.Field()
     login = LoginMutation.Field()
