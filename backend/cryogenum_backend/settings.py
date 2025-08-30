@@ -25,7 +25,7 @@ DEBUG = os.getenv("DJANGO_DEBUG", "True") == "True"
 # --------------------------------------
 ALLOWED_HOSTS = os.getenv(
     "DJANGO_ALLOWED_HOSTS",
-    "localhost,127.0.0.1,localhost:5173,cryogena.vercel.app"
+    "localhost,127.0.0.1,localhost:5173,cryogena.vercel.app,cryogena-backend.onrender.com"
 ).split(",")
 
 # --------------------------------------
@@ -141,14 +141,15 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # CSRF & CORS
 # --------------------------------------
 CSRF_TRUSTED_ORIGINS = [
-    "https://cryogenum-backend.onrender.com",
-    "https://cryogenum.vercel.app",
     "http://localhost:5173",
+    "https://cryogena-backend.onrender.com",
+    "https://cryogena.vercel.app/"
 ]
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
-    "https://cryogena.vercel.app"
+    "https://cryogena-backend.onrender.com",
+    "https://cryogena.vercel.app/"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
