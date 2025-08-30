@@ -66,9 +66,8 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
-    # must come before allauth middleware
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "allauth.account.middleware.AccountMiddleware",             # <-- here
+    "allauth.account.middleware.AccountMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -190,8 +189,8 @@ SITE_ID = 1
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
         "APP": {
-            "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
-            "secret": os.getenv("GOOGLE_CLIENT_SECRET", ""),
+            "client_id": os.getenv("GOOGLE_CLIENT_ID", "312036655117-mgu1ipt67ktr2gqg6q6ljd32n3vs0paj.apps.googleusercontent.com"),
+            "secret": os.getenv("GOOGLE_CLIENT_SECRET", "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"),
             "key": "",
         },
         "SCOPE": ["profile", "email"],
