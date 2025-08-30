@@ -7,6 +7,14 @@ from allauth.socialaccount.providers.google.provider import GoogleProvider
 from allauth.socialaccount.models import SocialLogin, SocialAccount, SocialToken
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client, OAuth2Error
 from allauth.socialaccount.helpers import complete_social_login
+from rest_framework_simplejwt.tokens import RefreshToken
+import os
+import os
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from .models import CustomUser
 
 
 # -------------------------
@@ -96,53 +104,41 @@ class LoginMutation(graphene.Mutation):
 # -------------------------
 class GoogleLoginMutation(graphene.Mutation):
     class Arguments:
-        access_token = graphene.String(required=True)
+        access_token = graphene.String(required=True)  # Google ID token
 
     user = graphene.Field(UserType)
     token = graphene.String()
 
     def mutate(self, info, access_token):
         try:
-            provider = GoogleProvider(info.context)
-            app = provider.get_app(info.context)
-            client = OAuth2Client(
-                request=info.context,
-                consumer_key=app.client_id,
-                consumer_secret=app.secret,
-                access_token_url="https://oauth2.googleapis.com/token",
-                authorize_url="https://accounts.google.com/o/oauth2/v2/auth",
-                api_base_url="https://www.googleapis.com/oauth2/v1/",
+            # Verify the Google ID token against your client ID
+            idinfo = id_token.verify_oauth2_token(
+                access_token,
+                google_requests.Request(),
+                os.getenv("GOOGLE_CLIENT_ID"),
             )
-            user_data = client.get_profile_info(access_token)
-            social_account, created = SocialAccount.objects.get_or_create(
-                provider=provider.id,
-                uid=user_data.get("sub"),
-                defaults={"extra_data": user_data}
-            )
-            if created:
-                user = CustomUser(
-                    email=user_data.get("email"),
-                    username=user_data.get(
-                        "name", user_data.get("email").split("@")[0]),
-                    avatar_initials="".join(
-                        word[0].upper() for word in user_data.get("name", user_data.get("email").split("@")[0]).split()[:2]
+
+            email = idinfo["email"]
+            name = idinfo.get("name", email.split("@")[0])
+
+            # Get or create user
+            user, created = CustomUser.objects.get_or_create(
+                email=email,
+                defaults={
+                    "username": name,
+                    "avatar_initials": "".join(
+                        word[0].upper() for word in name.split()[:2]
                     ),
-                    credits=100,
-                )
-                user.save()
-                social_account.user = user
-                social_account.save()
-            else:
-                user = social_account.user
-            social_login = SocialLogin(account=social_account, user=user)
-            complete_social_login(info.context, social_login)
-            SocialToken.objects.update_or_create(
-                account=social_account,
-                defaults={"token": access_token,
-                          "token_secret": "", "expires_at": None},
+                    "credits": 100,
+                },
             )
-            token = str(user.id)  # Simplified demo token
-            return GoogleLoginMutation(user=user, token=token)
+
+            # Issue JWT (using DRF SimpleJWT)
+            refresh = RefreshToken.for_user(user)
+            access = str(refresh.access_token)
+
+            return GoogleLoginMutation(user=user, token=access)
+
         except Exception as e:
             raise Exception(f"Google login failed: {str(e)}")
 # -------------------------
