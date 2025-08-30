@@ -266,23 +266,55 @@ const Workspace = () => {
         </section>
 
         {/* Files Section */}
+        {/* Files Section */}
         <section>
           <h2 className="text-xl font-semibold mb-3">Files</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {files.length > 0 ? (
-              files.map((file) => (
+          {files.length > 0 ? (
+            <div
+              className="
+        grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5
+        gap-4
+      "
+            >
+              {files.map((file) => (
                 <div
                   key={file.id}
-                  className="bg-neutral-800 p-4 rounded shadow flex justify-between items-center hover:shadow-lg transition"
+                  className="
+            bg-neutral-800 p-4 rounded-lg shadow 
+            hover:shadow-lg hover:bg-neutral-700 
+            transition flex flex-col
+          "
                 >
-                  <span>{file.name}</span>
-                  <MoreVertical className="cursor-pointer" size={18} />
+                  {/* File preview / icon */}
+                  <div className="flex-1 flex items-center justify-center mb-2">
+                    <div className="w-12 h-12 bg-neutral-700 rounded flex items-center justify-center text-lg">
+                      {file.fileType?.includes("pdf")
+                        ? "📄"
+                        : file.fileType?.includes("image")
+                        ? "🖼️"
+                        : "📁"}
+                    </div>
+                  </div>
+
+                  {/* File name */}
+                  <p
+                    className="text-sm text-white truncate w-full"
+                    title={file.name} // shows full name on hover
+                  >
+                    {file.name}
+                  </p>
+
+                  {/* Bottom row with actions */}
+                  <div className="flex items-center justify-between mt-2 text-xs text-neutral-400">
+                    <span>{(file.size / 1024).toFixed(1)} KB</span>
+                    <MoreVertical className="cursor-pointer" size={16} />
+                  </div>
                 </div>
-              ))
-            ) : (
-              <p className="text-neutral-400">No files uploaded yet.</p>
-            )}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-neutral-400">No files uploaded yet.</p>
+          )}
         </section>
       </main>
     </div>
