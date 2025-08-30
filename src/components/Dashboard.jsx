@@ -11,6 +11,8 @@ import {
   Music,
   Video,
   Briefcase,
+  Menu,
+  X,
 } from "lucide-react";
 import {
   useReactTable,
@@ -35,6 +37,7 @@ const Dashboard = () => {
   const [error, setError] = useState("");
   const { user, token, clearUser } = useUserStore();
   const navigate = useNavigate();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!user || !token) {
@@ -166,7 +169,6 @@ const Dashboard = () => {
     getCoreRowModel: getCoreRowModel(),
   });
 
-  // Loader Overlay
   if (loading) {
     return (
       <div className="fixed inset-0 bg-opacity-10 backdrop-blur-sm flex items-center justify-center z-50">
@@ -184,9 +186,26 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-neutral-900">
+    <div className="bg-neutral-900 min-h-screen flex">
+      {/* Mobile Navbar */}
+      <div className="md:hidden fixed top-0 left-0 right-0 bg-neutral-800 p-4 flex justify-between items-center z-50">
+        <h1 className="text-xl font-bold text-white">Cryogena</h1>
+        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+          {isSidebarOpen ? (
+            <X size={28} className="text-white" />
+          ) : (
+            <Menu size={28} className="text-white" />
+          )}
+        </button>
+      </div>
+
       {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-neutral-800 p-4 flex flex-col space-y-4">
+      <aside
+        className={`bg-neutral-800 w-64 p-4 space-y-4 fixed h-screen z-40 transform transition-transform duration-300
+        ${
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        } md:translate-x-0`}
+      >
         <a
           href="/workspace"
           className="flex items-center text-white hover:text-orange-500"
@@ -230,13 +249,13 @@ const Dashboard = () => {
       </aside>
 
       {/* Main Section */}
-      <main className="flex-1 p-4 md:p-8">
+      <main className="flex-1 md:ml-64 p-4 md:p-8 flex flex-col mt-14 md:mt-0">
         <h1 className="text-2xl md:text-3xl font-bold text-white mb-6">
           Dashboard
         </h1>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
           <StatCard
             icon={<Image size={28} />}
             label="Images"
@@ -264,10 +283,10 @@ const Dashboard = () => {
           />
         </div>
 
-        {/* Files Table */}
-        <div className="overflow-x-auto">
+        {/* Scrollable Table */}
+        <div className="flex-1 overflow-y-auto">
           <table className="w-full text-white text-sm md:text-base">
-            <thead className="bg-neutral-700">
+            <thead className="bg-neutral-700 sticky top-0">
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (

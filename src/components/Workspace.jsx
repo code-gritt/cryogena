@@ -19,8 +19,7 @@ const Workspace = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [dropdownFileId, setDropdownFileId] = useState(null);
-  const [renameFileId, setRenameFileId] = useState(null);
-  const [newFileName, setNewFileName] = useState("");
+
   const { user, token, clearUser } = useUserStore();
   const navigate = useNavigate();
 
@@ -30,13 +29,13 @@ const Workspace = () => {
     Authorization: `Bearer ${token}`,
   };
 
-  // ✅ Fetch workspace data (files + folders)
+  // ✅ Fetch workspace data
   const fetchWorkspaceData = async () => {
     setLoading(true);
     setError("");
 
     try {
-      // Fetch files
+      // Files
       const filesResponse = await fetch(endpoint, {
         method: "POST",
         headers,
@@ -61,7 +60,7 @@ const Workspace = () => {
       if (filesErrors) throw new Error(filesErrors[0].message);
       setFiles(filesData.userFiles);
 
-      // Fetch folders
+      // Folders
       const foldersResponse = await fetch(endpoint, {
         method: "POST",
         headers,
@@ -96,13 +95,19 @@ const Workspace = () => {
     fetchWorkspaceData();
   }, [user, token, navigate]);
 
+  // ✅ Logout
   const handleLogout = () => {
     clearUser();
     navigate("/login");
+    toast.success("Logged out successfully");
   };
 
+  // ✅ Create Folder
   const handleCreateFolder = async () => {
-    if (!newFolderName.trim()) return;
+    if (!newFolderName.trim()) {
+      toast.error("Folder name cannot be empty");
+      return;
+    }
     try {
       const response = await fetch(endpoint, {
         method: "POST",
@@ -123,6 +128,7 @@ const Workspace = () => {
       });
       const { data, errors } = await response.json();
       if (errors) throw new Error(errors[0].message);
+
       setFolders((prev) => [data.createFolder.folder, ...prev]);
       setNewFolderName("");
       setIsModalOpen(false);
@@ -132,14 +138,12 @@ const Workspace = () => {
     }
   };
 
-  // ✅ Handle file upload immediately when selected
+  // ✅ Upload Files
   const handleUpload = async (e) => {
     const selectedFiles = e.target.files;
     if (!selectedFiles.length) return;
 
     const formData = new FormData();
-
-    // The GraphQL mutation
     formData.append(
       "operations",
       JSON.stringify({
@@ -155,14 +159,12 @@ const Workspace = () => {
       })
     );
 
-    // Map files to variables
     const map = {};
     Array.from(selectedFiles).forEach((_, i) => {
       map[i] = [`variables.files.${i}`];
     });
     formData.append("map", JSON.stringify(map));
 
-    // Attach files
     Array.from(selectedFiles).forEach((file, i) => {
       formData.append(i, file);
     });
@@ -177,12 +179,13 @@ const Workspace = () => {
       if (result.errors) throw new Error(result.errors[0].message);
 
       toast.success(result.data.uploadFile.message || "Files uploaded!");
-      fetchWorkspaceData(); // Refresh file list
+      fetchWorkspaceData();
     } catch (err) {
       toast.error(err.message);
     }
   };
 
+  // ✅ Loading UI
   if (loading) {
     return (
       <div className="fixed inset-0 bg-opacity-10 backdrop-blur-sm flex items-center justify-center z-50">
@@ -191,6 +194,7 @@ const Workspace = () => {
     );
   }
 
+  // ✅ Error UI
   if (error) {
     return (
       <div className="flex justify-center items-center h-screen text-red-500">
@@ -199,10 +203,11 @@ const Workspace = () => {
     );
   }
 
+  // ✅ Main UI
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-neutral-900">
+    <div className="flex h-screen bg-neutral-900">
       {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-neutral-800 p-4 flex flex-col space-y-4">
+      <aside className="w-64 bg-neutral-800 p-4 flex flex-col space-y-4 shadow-lg fixed top-0 left-0 bottom-0 z-40 mt-16">
         <a
           href="/dashboard"
           className="flex items-center text-white hover:text-orange-500"
@@ -224,9 +229,10 @@ const Workspace = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-6 text-white">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Workspace</h1>
+      <div className="flex-1 ml-64 flex flex-col">
+        {/* Top Navbar */}
+        <header className="sticky top-0 z-30 bg-neutral-900 border-b border-neutral-700 px-6 py-4 flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-white">Workspace</h1>
           <div className="flex space-x-2">
             <label className="bg-orange-500 px-4 py-2 rounded flex items-center cursor-pointer">
               <Upload className="mr-2" size={18} /> Upload
@@ -238,79 +244,61 @@ const Workspace = () => {
               />
             </label>
           </div>
-        </div>
+        </header>
 
-        {/* Folders Section */}
-        <section className="mb-8">
-          <h2 className="text-xl font-semibold mb-3">Folders</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {folders.length > 0 ? (
-              folders.map((folder) => (
-                <div
-                  key={folder.id}
-                  className="bg-neutral-800 p-4 rounded shadow hover:shadow-lg transition"
-                >
-                  📁 {folder.name}
-                </div>
-              ))
-            ) : (
-              <p className="text-neutral-400">No folders created yet.</p>
-            )}
-          </div>
-        </section>
+        {/* Scrollable content */}
+        <main className="flex-1 overflow-y-auto p-6 text-white">
+          {/* Files */}
+          <section>
+            <h2 className="text-xl font-semibold mb-3">Files</h2>
+            {files.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {files.map((file) => (
+                  <div
+                    key={file.id}
+                    className="bg-neutral-800 p-4 rounded-lg shadow hover:shadow-lg hover:bg-neutral-700 transition flex flex-col"
+                  >
+                    {/* File preview */}
+                    <div className="flex-1 flex items-center justify-center mb-2">
+                      <div className="w-12 h-12 bg-neutral-700 rounded flex items-center justify-center text-lg">
+                        {file.fileType?.includes("pdf")
+                          ? "📄"
+                          : file.fileType?.includes("image")
+                          ? "🖼️"
+                          : "📁"}
+                      </div>
+                    </div>
 
-        {/* Files Section */}
-        {/* Files Section */}
-        <section>
-          <h2 className="text-xl font-semibold mb-3">Files</h2>
-          {files.length > 0 ? (
-            <div
-              className="
-        grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5
-        gap-4
-      "
-            >
-              {files.map((file) => (
-                <div
-                  key={file.id}
-                  className="
-            bg-neutral-800 p-4 rounded-lg shadow 
-            hover:shadow-lg hover:bg-neutral-700 
-            transition flex flex-col
-          "
-                >
-                  {/* File preview / icon */}
-                  <div className="flex-1 flex items-center justify-center mb-2">
-                    <div className="w-12 h-12 bg-neutral-700 rounded flex items-center justify-center text-lg">
-                      {file.fileType?.includes("pdf")
-                        ? "📄"
-                        : file.fileType?.includes("image")
-                        ? "🖼️"
-                        : "📁"}
+                    {/* File name */}
+                    <p
+                      className="text-sm text-white truncate w-full"
+                      title={file.name}
+                    >
+                      {file.name}
+                    </p>
+
+                    {/* File actions */}
+                    <div className="flex items-center justify-between mt-2 text-xs text-neutral-400">
+                      <span>{(file.size / 1024).toFixed(1)} KB</span>
+                      <MoreVertical
+                        className="cursor-pointer"
+                        size={16}
+                        onClick={() =>
+                          setDropdownFileId(
+                            dropdownFileId === file.id ? null : file.id
+                          )
+                        }
+                      />
                     </div>
                   </div>
-
-                  {/* File name */}
-                  <p
-                    className="text-sm text-white truncate w-full"
-                    title={file.name} // shows full name on hover
-                  >
-                    {file.name}
-                  </p>
-
-                  {/* Bottom row with actions */}
-                  <div className="flex items-center justify-between mt-2 text-xs text-neutral-400">
-                    <span>{(file.size / 1024).toFixed(1)} KB</span>
-                    <MoreVertical className="cursor-pointer" size={16} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-neutral-400">No files uploaded yet.</p>
-          )}
-        </section>
-      </main>
+                ))}
+              </div>
+            ) : (
+              <p className="text-neutral-400">No files uploaded yet.</p>
+            )}
+          </section>
+        </main>
+      </div>
     </div>
   );
 };
