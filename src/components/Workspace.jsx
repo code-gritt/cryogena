@@ -228,12 +228,6 @@ const Workspace = () => {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Workspace</h1>
           <div className="flex space-x-2">
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="bg-orange-500 px-4 py-2 rounded flex items-center"
-            >
-              <FolderPlus className="mr-2" size={18} /> New Folder
-            </button>
             <label className="bg-orange-500 px-4 py-2 rounded flex items-center cursor-pointer">
               <Upload className="mr-2" size={18} /> Upload
               <input
