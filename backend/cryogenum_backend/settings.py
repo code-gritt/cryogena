@@ -25,7 +25,7 @@ DEBUG = os.getenv("DJANGO_DEBUG", "True") == "True"
 # --------------------------------------
 ALLOWED_HOSTS = os.getenv(
     "DJANGO_ALLOWED_HOSTS",
-    "localhost,127.0.0.1,cryogenum-backend.onrender.com,localhost:5173"
+    "localhost,127.0.0.1,localhost:5173,cryogena.vercel.app"
 ).split(",")
 
 # --------------------------------------
@@ -147,9 +147,8 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 CORS_ALLOWED_ORIGINS = [
-    "https://cryogenum-backend.onrender.com",
-    "https://cryogenum.vercel.app",
     "http://localhost:5173",
+    "https://cryogena.vercel.app"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
