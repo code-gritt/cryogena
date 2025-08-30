@@ -1,6 +1,6 @@
 import graphene
 from graphene_django import DjangoObjectType
-from graphene_file_upload.scalars import Upload  # ✅ fix: use Upload scalar
+from graphene_file_upload.scalars import Upload
 from django.contrib.auth import authenticate
 from .models import CustomUser, File, Folder
 from django.db.models import Sum
@@ -10,8 +10,9 @@ import os
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
-
 # Helper to generate JWTs
+
+
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
     return {
@@ -19,15 +20,17 @@ def get_tokens_for_user(user):
         "access": str(refresh.access_token),
     }
 
-
 # User type
+
+
 class UserType(DjangoObjectType):
     class Meta:
         model = CustomUser
         fields = ("id", "username", "email", "credits", "avatar_initials")
 
-
 # File type
+
+
 class FileType(DjangoObjectType):
     class Meta:
         model = File
@@ -42,8 +45,17 @@ class FileType(DjangoObjectType):
     def resolve_file_url(self, info):
         return self.file.url if self.file else ""
 
+# Folder type
+
+
+class FolderType(DjangoObjectType):
+    class Meta:
+        model = Folder
+        fields = ("id", "name", "created_at")
 
 # Dashboard stats type
+
+
 class DashboardStatsType(graphene.ObjectType):
     images_count = graphene.Int()
     pdfs_count = graphene.Int()
@@ -54,11 +66,19 @@ class DashboardStatsType(graphene.ObjectType):
     total_storage_used = graphene.Int()
     storage_limit = graphene.Int()
 
+# Folder contents type
+
+
+class FolderContentsType(graphene.ObjectType):
+    files = graphene.List(FileType)
+    folders = graphene.List(FolderType)
 
 # Upload file mutation
+
+
 class UploadFileMutation(graphene.Mutation):
     class Arguments:
-        files = graphene.List(Upload, required=True)   # ✅ fixed
+        files = graphene.List(Upload, required=True)
         folder_id = graphene.ID(required=False)
 
     success = graphene.Boolean()
@@ -108,15 +128,9 @@ class UploadFileMutation(graphene.Mutation):
 
         return UploadFileMutation(success=True, message="Files uploaded successfully")
 
-
-# Folder type
-class FolderType(DjangoObjectType):
-    class Meta:
-        model = Folder
-        fields = ("id", "name", "created_at")
-
-
 # Folder mutations
+
+
 class CreateFolderMutation(graphene.Mutation):
     class Arguments:
         name = graphene.String(required=True)
@@ -182,8 +196,9 @@ class DeleteFileMutation(graphene.Mutation):
         except File.DoesNotExist:
             raise Exception("File not found")
 
-
 # Auth mutations
+
+
 class RegisterMutation(graphene.Mutation):
     class Arguments:
         username = graphene.String(required=True)
@@ -246,8 +261,9 @@ class GoogleLoginMutation(graphene.Mutation):
         except Exception as e:
             raise Exception(f"Google login failed: {str(e)}")
 
-
 # Root schema
+
+
 class Mutation(graphene.ObjectType):
     register = RegisterMutation.Field()
     login = LoginMutation.Field()
@@ -263,6 +279,8 @@ class Query(graphene.ObjectType):
     dashboard_stats = graphene.Field(DashboardStatsType)
     user_files = graphene.List(FileType)
     user_folders = graphene.List(FolderType)
+    folder_contents = graphene.Field(
+        FolderContentsType, folder_id=graphene.ID(required=True))
 
     def resolve_me(self, info):
         user = info.context.user
@@ -299,6 +317,21 @@ class Query(graphene.ObjectType):
         if user.is_anonymous:
             raise Exception("Not authenticated")
         return Folder.objects.filter(owner=user).order_by('-created_at')
+
+    def resolve_folder_contents(self, info, folder_id):
+        user = info.context.user
+        if user.is_anonymous:
+            raise Exception("Not authenticated")
+        try:
+            folder = Folder.objects.get(id=folder_id, owner=user)
+        except Folder.DoesNotExist:
+            raise Exception("Folder not found or not accessible")
+        return FolderContentsType(
+            files=File.objects.filter(
+                owner=user, folder_id=folder_id, is_deleted=False).order_by('-created_at'),
+            folders=Folder.objects.filter(
+                owner=user, parent_id=folder_id).order_by('-created_at')
+        )
 
 
 schema = graphene.Schema(query=Query, mutation=Mutation)
