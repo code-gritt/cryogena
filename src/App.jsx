@@ -8,6 +8,7 @@ import Pricing from "./components/Pricing";
 import Footer from "./components/Footer";
 import Login from "./components/Login";
 import Register from "./components/Register";
+import Dashboard from "./components/Dashboard";
 
 // Create a Home component for landing page sections
 const Home = () => (
@@ -29,10 +30,8 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route
-          path="/dashboard"
-          element={<div>Dashboard (To be implemented)</div>}
-        />
+
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route
           path="/pricing"
           element={<div>Pricing (To be implemented)</div>}

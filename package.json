@@ -12,6 +12,7 @@
   "dependencies": {
     "@apollo/client": "^4.0.3",
     "@react-oauth/google": "^0.12.2",
+    "@tanstack/react-table": "^8.21.3",
     "graphql": "^16.11.0",
     "lucide-react": "^0.344.0",
     "react": "^18.2.0",

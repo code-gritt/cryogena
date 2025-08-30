@@ -1,13 +1,14 @@
 import graphene
 from graphene_django import DjangoObjectType
 from django.contrib.auth import authenticate
-from .models import CustomUser
+from .models import CustomUser, File, Folder
+from django.db.models import Sum, Count, Q
 from rest_framework_simplejwt.tokens import RefreshToken
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from dj_rest_auth.registration.views import SocialLoginView
 from django.test import RequestFactory
 from .views import GoogleLogin
-import requests 
+import requests
 
 
 # -------------------------
@@ -30,9 +31,32 @@ class UserType(DjangoObjectType):
         fields = ("id", "username", "email", "credits", "avatar_initials")
 
 
+class FileType(DjangoObjectType):
+    class Meta:
+        model = File
+        fields = ('id', 'name', 'created_at', 'size')
+
+    owner_avatar = graphene.String()
+
+    def resolve_owner_avatar(self, info):
+        return self.owner.avatar_initials
+
+
+class DashboardStatsType(graphene.ObjectType):
+    images_count = graphene.Int()
+    pdfs_count = graphene.Int()
+    docs_count = graphene.Int()
+    folders_count = graphene.Int()
+    mp3s_count = graphene.Int()
+    videos_count = graphene.Int()
+    total_storage_used = graphene.Int()
+    storage_limit = graphene.Int()
+
 # -------------------------
 # Register Mutation
 # -------------------------
+
+
 class RegisterMutation(graphene.Mutation):
     class Arguments:
         username = graphene.String(required=True)
@@ -123,6 +147,45 @@ class Query(graphene.ObjectType):
         if user.is_anonymous:
             raise Exception("Not authenticated")
         return user
+
+    dashboard_stats = graphene.Field(DashboardStatsType)
+
+    def resolve_dashboard_stats(self, info):
+        user = info.context.user
+        if user.is_anonymous:
+            raise Exception("Not authenticated")
+
+        files = File.objects.filter(owner=user, is_deleted=False)
+        folders = Folder.objects.filter(owner=user)
+
+        images_count = files.filter(file_type='image').count()
+        pdfs_count = files.filter(file_type='pdf').count()
+        docs_count = files.filter(file_type='doc').count()
+        mp3s_count = files.filter(file_type='mp3').count()
+        videos_count = files.filter(file_type='video').count()
+        folders_count = folders.count()
+
+        total_storage_used = files.aggregate(total_size=Sum('size'))[
+            'total_size'] or 0
+
+        return DashboardStatsType(
+            images_count=images_count,
+            pdfs_count=pdfs_count,
+            docs_count=docs_count,
+            folders_count=folders_count,
+            mp3s_count=mp3s_count,
+            videos_count=videos_count,
+            total_storage_used=total_storage_used,
+            storage_limit=user.storage_limit
+        )
+
+    user_files = graphene.List(FileType)
+
+    def resolve_user_files(self, info):
+        user = info.context.user
+        if user.is_anonymous:
+            raise Exception("Not authenticated")
+        return File.objects.filter(owner=user, is_deleted=False).order_by('-created_at')
 
 
 # -------------------------
