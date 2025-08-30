@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Lock, Mail } from "lucide-react";
 import { GoogleLogin, GoogleOAuthProvider } from "@react-oauth/google";
-import useUserStore from "../store/userStore";
+import useUserStore from "../../store/userStore";
 
 const Login = () => {
   const [email, setEmail] = useState("");
