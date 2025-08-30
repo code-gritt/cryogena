@@ -1,12 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LogOut,
   Trash2,
+  Download,
   Briefcase,
   MoreVertical,
   FolderPlus,
   Upload,
+  Folder,
+  Image,
+  FileText,
+  Music,
+  Video,
 } from "lucide-react";
 import useUserStore from "../../store/userStore";
 import toast from "react-hot-toast";
@@ -17,11 +23,21 @@ const Workspace = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [selectedFolderId, setSelectedFolderId] = useState(null);
   const [newFolderName, setNewFolderName] = useState("");
   const [dropdownFileId, setDropdownFileId] = useState(null);
-
+  const [renameFileId, setRenameFileId] = useState(null);
+  const [newFileName, setNewFileName] = useState("");
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({
+    x: 0,
+    y: 0,
+  });
   const { user, token, clearUser } = useUserStore();
   const navigate = useNavigate();
+  const mainRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const endpoint = "https://cryogena-backend.onrender.com/graphql/";
   const headers = {
@@ -29,7 +45,7 @@ const Workspace = () => {
     Authorization: `Bearer ${token}`,
   };
 
-  // ✅ Fetch workspace data
+  // Fetch workspace data
   const fetchWorkspaceData = async () => {
     setLoading(true);
     setError("");
@@ -95,14 +111,32 @@ const Workspace = () => {
     fetchWorkspaceData();
   }, [user, token, navigate]);
 
-  // ✅ Logout
+  // Handle right-click context menu
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    setContextMenuPosition({ x: e.clientX, y: e.clientY });
+    setIsContextMenuOpen(true);
+  };
+
+  // Close context menu on click outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setIsContextMenuOpen(false);
+      setDropdownFileId(null);
+      setRenameFileId(null);
+    };
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
+  // Logout
   const handleLogout = () => {
     clearUser();
     navigate("/login");
     toast.success("Logged out successfully");
   };
 
-  // ✅ Create Folder
+  // Create Folder
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) {
       toast.error("Folder name cannot be empty");
@@ -119,6 +153,7 @@ const Workspace = () => {
                 folder {
                   id
                   name
+                  createdAt
                 }
               }
             }
@@ -129,63 +164,160 @@ const Workspace = () => {
       const { data, errors } = await response.json();
       if (errors) throw new Error(errors[0].message);
 
-      setFolders((prev) => [data.createFolder.folder, ...prev]);
+      setFolders([data.createFolder.folder, ...folders]);
       setNewFolderName("");
       setIsModalOpen(false);
+      setIsContextMenuOpen(false);
       toast.success("Folder created successfully");
+      return data.createFolder.folder.id; // Return folder ID for upload
     } catch (err) {
       toast.error(err.message);
+      return null;
     }
   };
 
-  // ✅ Upload Files
-  const handleUpload = async (e) => {
-    const selectedFiles = e.target.files;
-    if (!selectedFiles.length) return;
+  // Upload Files
+  const handleUpload = async (files, folderId = null) => {
+    if (!files.length) {
+      toast.error("Please select files to upload.");
+      return;
+    }
 
-    const formData = new FormData();
-    formData.append(
-      "operations",
-      JSON.stringify({
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      const operations = {
         query: `
-          mutation ($files: [Upload!]!) {
-            uploadFile(files: $files) {
+          mutation ($files: [Upload!]!, $folderId: ID) {
+            uploadFile(files: $files, folderId: $folderId) {
               success
               message
             }
           }
         `,
-        variables: { files: new Array(selectedFiles.length).fill(null) },
-      })
-    );
+        variables: { files: new Array(files.length).fill(null), folderId },
+      };
+      formData.append("operations", JSON.stringify(operations));
+      const map = {};
+      Array.from(files).forEach((_, i) => {
+        map[i] = [`variables.files.${i}`];
+      });
+      formData.append("map", JSON.stringify(map));
+      Array.from(files).forEach((file, i) => formData.append(`${i}`, file));
 
-    const map = {};
-    Array.from(selectedFiles).forEach((_, i) => {
-      map[i] = [`variables.files.${i}`];
-    });
-    formData.append("map", JSON.stringify(map));
-
-    Array.from(selectedFiles).forEach((file, i) => {
-      formData.append(i, file);
-    });
-
-    try {
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-      const result = await response.json();
-      if (result.errors) throw new Error(result.errors[0].message);
-
-      toast.success(result.data.uploadFile.message || "Files uploaded!");
-      fetchWorkspaceData();
+      const { data, errors } = await response.json();
+      if (errors) throw new Error(errors[0].message);
+      if (data.uploadFile.success) {
+        await fetchWorkspaceData();
+        setSelectedFiles([]);
+        setSelectedFolderId(null);
+        setIsModalOpen(false);
+        toast.success(data.uploadFile.message);
+      }
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message || "Upload failed.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  // ✅ Loading UI
+  // Right-Click Upload to New Folder
+  const handleUploadToNewFolder = async () => {
+    setIsContextMenuOpen(false);
+    setIsModalOpen(true);
+    setNewFolderName("New Folder");
+  };
+
+  // Handle modal submission (folder creation or file upload)
+  const handleModalSubmit = async () => {
+    if (newFolderName.trim()) {
+      const folderId = await handleCreateFolder();
+      if (folderId && selectedFiles.length) {
+        await handleUpload(selectedFiles, folderId);
+      }
+    } else if (selectedFiles.length) {
+      await handleUpload(selectedFiles, selectedFolderId);
+    } else {
+      toast.error("Please select files or enter a folder name.");
+    }
+  };
+
+  // Rename File
+  const handleRename = async (fileId, newName) => {
+    setLoading(true);
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          query: `
+            mutation ($fileId: ID!, $newName: String!) {
+              renameFile(fileId: $fileId, newName: $newName) {
+                success
+                message
+              }
+            }
+          `,
+          variables: { fileId, newName },
+        }),
+      });
+      const { data, errors } = await response.json();
+      if (errors) throw new Error(errors[0].message);
+      if (data.renameFile.success) {
+        setFiles(
+          files.map((f) => (f.id === fileId ? { ...f, name: newName } : f))
+        );
+        setRenameFileId(null);
+        setNewFileName("");
+        setDropdownFileId(null);
+        toast.success("File renamed successfully");
+      }
+    } catch (err) {
+      toast.error(err.message || "Rename failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Delete File
+  const handleDelete = async (fileId) => {
+    setLoading(true);
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          query: `
+            mutation ($fileId: ID!) {
+              deleteFile(fileId: $fileId) {
+                success
+                message
+              }
+            }
+          `,
+          variables: { fileId },
+        }),
+      });
+      const { data, errors } = await response.json();
+      if (errors) throw new Error(errors[0].message);
+      if (data.deleteFile.success) {
+        setFiles(files.filter((f) => f.id !== fileId));
+        setDropdownFileId(null);
+        toast.success("File moved to bin");
+      }
+    } catch (err) {
+      toast.error(err.message || "Delete failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Loading UI
   if (loading) {
     return (
       <div className="fixed inset-0 bg-opacity-10 backdrop-blur-sm flex items-center justify-center z-50">
@@ -194,7 +326,7 @@ const Workspace = () => {
     );
   }
 
-  // ✅ Error UI
+  // Error UI
   if (error) {
     return (
       <div className="flex justify-center items-center h-screen text-red-500">
@@ -203,11 +335,10 @@ const Workspace = () => {
     );
   }
 
-  // ✅ Main UI
   return (
-    <div className="flex h-screen bg-neutral-900">
+    <div className="flex flex-col md:flex-row min-h-screen bg-neutral-900">
       {/* Sidebar */}
-      <aside className="w-64 bg-neutral-800 p-4 flex flex-col space-y-4 shadow-lg fixed top-0 left-0 bottom-0 z-40 mt-16">
+      <aside className="w-full md:w-64 bg-neutral-800 p-4 flex flex-col space-y-4">
         <a
           href="/dashboard"
           className="flex items-center text-white hover:text-orange-500"
@@ -228,77 +359,204 @@ const Workspace = () => {
         </a>
       </aside>
 
-      {/* Main Content */}
-      <div className="flex-1 ml-64 flex flex-col">
-        {/* Top Navbar */}
-        <header className="sticky top-0 z-30 bg-neutral-900 border-b border-neutral-700 px-6 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-white">Workspace</h1>
-          <div className="flex space-x-2">
-            <label className="bg-orange-500 px-4 py-2 rounded flex items-center cursor-pointer">
-              <Upload className="mr-2" size={18} /> Upload
-              <input
-                type="file"
-                multiple
-                className="hidden"
-                onChange={handleUpload}
-              />
-            </label>
-          </div>
-        </header>
+      {/* Main Section */}
+      <main
+        className="flex-1 p-4 md:p-8"
+        ref={mainRef}
+        onContextMenu={handleContextMenu}
+      >
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl md:text-3xl font-bold text-white">
+            Workspace
+          </h1>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="py-2 px-4 bg-gradient-to-r from-orange-500 to-orange-800 text-white rounded-md hover:from-orange-600 hover:to-orange-900"
+          >
+            <Upload size={16} className="inline mr-2" /> Upload
+          </button>
+        </div>
 
-        {/* Scrollable content */}
-        <main className="flex-1 overflow-y-auto p-6 text-white">
-          {/* Files */}
-          <section>
-            <h2 className="text-xl font-semibold mb-3">Files</h2>
-            {files.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {files.map((file) => (
-                  <div
-                    key={file.id}
-                    className="bg-neutral-800 p-4 rounded-lg shadow hover:shadow-lg hover:bg-neutral-700 transition flex flex-col"
+        {/* File and Folder Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {folders.map((folder) => (
+            <div
+              key={folder.id}
+              className="relative bg-neutral-800 p-4 rounded-lg text-center"
+            >
+              <Folder size={40} className="text-orange-500 mx-auto mb-2" />
+              <p className="text-white text-sm truncate">{folder.name}</p>
+            </div>
+          ))}
+          {files.map((file) => (
+            <div
+              key={file.id}
+              className="relative bg-neutral-800 p-4 rounded-lg text-center"
+            >
+              {file.fileType === "image" && (
+                <Image size={40} className="text-orange-500 mx-auto mb-2" />
+              )}
+              {file.fileType === "pdf" && (
+                <FileText size={40} className="text-orange-500 mx-auto mb-2" />
+              )}
+              {file.fileType === "doc" && (
+                <FileText size={40} className="text-orange-500 mx-auto mb-2" />
+              )}
+              {file.fileType === "mp3" && (
+                <Music size={40} className="text-orange-500 mx-auto mb-2" />
+              )}
+              {file.fileType === "video" && (
+                <Video size={40} className="text-orange-500 mx-auto mb-2" />
+              )}
+              <p className="text-white text-sm truncate">{file.name}</p>
+              <button
+                onClick={() => setDropdownFileId(file.id)}
+                className="absolute top-2 right-2 text-neutral-400 hover:text-orange-500"
+              >
+                <MoreVertical size={20} />
+              </button>
+              {dropdownFileId === file.id && (
+                <div className="absolute top-8 right-2 bg-neutral-700 rounded-md shadow-lg z-10">
+                  <button
+                    onClick={() => window.open(file.fileUrl, "_blank")}
+                    className="block w-full text-left px-4 py-2 text-white hover:bg-neutral-600"
                   >
-                    {/* File preview */}
-                    <div className="flex-1 flex items-center justify-center mb-2">
-                      <div className="w-12 h-12 bg-neutral-700 rounded flex items-center justify-center text-lg">
-                        {file.fileType?.includes("pdf")
-                          ? "📄"
-                          : file.fileType?.includes("image")
-                          ? "🖼️"
-                          : "📁"}
-                      </div>
-                    </div>
-
-                    {/* File name */}
-                    <p
-                      className="text-sm text-white truncate w-full"
-                      title={file.name}
+                    Download
+                  </button>
+                  <button
+                    onClick={() => {
+                      setRenameFileId(file.id);
+                      setNewFileName(file.name);
+                      setDropdownFileId(null);
+                    }}
+                    className="block w-full text-left px-4 py-2 text-white hover:bg-neutral-600"
+                  >
+                    Rename
+                  </button>
+                  <button
+                    onClick={() => handleDelete(file.id)}
+                    className="block w-full text-left px-4 py-2 text-white hover:bg-neutral-600"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+              {renameFileId === file.id && (
+                <div className="absolute inset-0 bg-neutral-800 p-4 rounded-lg flex flex-col space-y-2">
+                  <input
+                    type="text"
+                    value={newFileName}
+                    onChange={(e) => setNewFileName(e.target.value)}
+                    className="w-full p-2 rounded-md bg-neutral-700 text-white border border-neutral-600 focus:outline-none focus:border-orange-500"
+                  />
+                  <div className="flex justify-end space-x-2">
+                    <button
+                      onClick={() => setRenameFileId(null)}
+                      className="py-1 px-2 bg-neutral-600 text-white rounded-md"
                     >
-                      {file.name}
-                    </p>
-
-                    {/* File actions */}
-                    <div className="flex items-center justify-between mt-2 text-xs text-neutral-400">
-                      <span>{(file.size / 1024).toFixed(1)} KB</span>
-                      <MoreVertical
-                        className="cursor-pointer"
-                        size={16}
-                        onClick={() =>
-                          setDropdownFileId(
-                            dropdownFileId === file.id ? null : file.id
-                          )
-                        }
-                      />
-                    </div>
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handleRename(file.id, newFileName)}
+                      className="py-1 px-2 bg-gradient-to-r from-orange-500 to-orange-800 text-white rounded-md"
+                    >
+                      Save
+                    </button>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-neutral-400">No files uploaded yet.</p>
-            )}
-          </section>
-        </main>
-      </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Context Menu */}
+        {isContextMenuOpen && (
+          <div
+            className="absolute bg-neutral-700 rounded-md shadow-lg z-50"
+            style={{ top: contextMenuPosition.y, left: contextMenuPosition.x }}
+          >
+            <button
+              onClick={() => {
+                setIsModalOpen(true);
+                setNewFolderName("New Folder");
+                setIsContextMenuOpen(false);
+              }}
+              className="block w-full text-left px-4 py-2 text-white hover:bg-neutral-600"
+            >
+              New Folder
+            </button>
+            <button
+              onClick={handleUploadToNewFolder}
+              className="block w-full text-left px-4 py-2 text-white hover:bg-neutral-600"
+            >
+              Upload to New Folder
+            </button>
+          </div>
+        )}
+      </main>
+
+      {/* Upload Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-neutral-800 p-6 rounded-lg w-full max-w-md">
+            <h2 className="text-xl font-bold text-white mb-4">
+              Upload Files or Create Folder
+            </h2>
+            <input
+              type="file"
+              multiple
+              accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.mp3,.mp4"
+              onChange={(e) => setSelectedFiles([...e.target.files])}
+              className="w-full p-2 mb-4 bg-neutral-700 text-white rounded-md"
+              ref={fileInputRef}
+            />
+            <div className="relative mb-4">
+              <input
+                type="text"
+                placeholder="New Folder Name"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                className="w-full p-2 rounded-md bg-neutral-700 text-white border border-neutral-600 focus:outline-none focus:border-orange-500"
+              />
+              <FolderPlus
+                size={20}
+                className="absolute top-2 right-2 text-neutral-400"
+              />
+            </div>
+            <select
+              value={selectedFolderId || ""}
+              onChange={(e) => setSelectedFolderId(e.target.value || null)}
+              className="w-full p-2 mb-4 rounded-md bg-neutral-700 text-white border border-neutral-600 focus:outline-none focus:border-orange-500"
+            >
+              <option value="">No Folder</option>
+              {folders.map((folder) => (
+                <option key={folder.id} value={folder.id}>
+                  {folder.name}
+                </option>
+              ))}
+            </select>
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setSelectedFiles([]);
+                  setNewFolderName("");
+                  setSelectedFolderId(null);
+                }}
+                className="py-2 px-4 bg-neutral-600 text-white rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleModalSubmit}
+                className="py-2 px-4 bg-gradient-to-r from-orange-500 to-orange-800 text-white rounded-md hover:from-orange-600 hover:to-orange-900"
+              >
+                {newFolderName ? "Create Folder" : "Upload"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
