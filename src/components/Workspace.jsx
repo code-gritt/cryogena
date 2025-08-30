@@ -9,6 +9,7 @@ import {
   Upload,
 } from "lucide-react";
 import useUserStore from "../../store/userStore";
+import toast from "react-hot-toast";
 
 const Workspace = () => {
   const [files, setFiles] = useState([]);
@@ -16,7 +17,6 @@ const Workspace = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState([]);
   const [newFolderName, setNewFolderName] = useState("");
   const [dropdownFileId, setDropdownFileId] = useState(null);
   const [renameFileId, setRenameFileId] = useState(null);
@@ -24,75 +24,75 @@ const Workspace = () => {
   const { user, token, clearUser } = useUserStore();
   const navigate = useNavigate();
 
+  const endpoint = "https://cryogena-backend.onrender.com/graphql/";
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+
+  // ✅ Fetch workspace data (files + folders)
+  const fetchWorkspaceData = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      // Fetch files
+      const filesResponse = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          query: `
+            query {
+              userFiles {
+                id
+                name
+                ownerAvatar
+                createdAt
+                size
+                fileType
+                fileUrl
+              }
+            }
+          `,
+        }),
+      });
+      const { data: filesData, errors: filesErrors } =
+        await filesResponse.json();
+      if (filesErrors) throw new Error(filesErrors[0].message);
+      setFiles(filesData.userFiles);
+
+      // Fetch folders
+      const foldersResponse = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          query: `
+            query {
+              userFolders {
+                id
+                name
+                createdAt
+              }
+            }
+          `,
+        }),
+      });
+      const { data: foldersData, errors: foldersErrors } =
+        await foldersResponse.json();
+      if (foldersErrors) throw new Error(foldersErrors[0].message);
+      setFolders(foldersData.userFolders);
+    } catch (err) {
+      setError(err.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!user || !token) {
       navigate("/login");
       return;
     }
-
-    const fetchWorkspaceData = async () => {
-      setLoading(true);
-      setError("");
-
-      try {
-        const endpoint = "https://cryogena-backend.onrender.com/graphql/";
-        const headers = {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        };
-
-        // ✅ Fetch files
-        const filesResponse = await fetch(endpoint, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            query: `
-              query {
-                userFiles {
-                  id
-                  name
-                  ownerAvatar
-                  createdAt
-                  size
-                  fileType
-                  fileUrl
-                }
-              }
-            `,
-          }),
-        });
-        const { data: filesData, errors: filesErrors } =
-          await filesResponse.json();
-        if (filesErrors) throw new Error(filesErrors[0].message);
-        setFiles(filesData.userFiles);
-
-        // ✅ Fetch folders
-        const foldersResponse = await fetch(endpoint, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            query: `
-              query {
-                userFolders {
-                  id
-                  name
-                  createdAt
-                }
-              }
-            `,
-          }),
-        });
-        const { data: foldersData, errors: foldersErrors } =
-          await foldersResponse.json();
-        if (foldersErrors) throw new Error(foldersErrors[0].message);
-        setFolders(foldersData.userFolders);
-      } catch (err) {
-        setError(err.message || "Something went wrong.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchWorkspaceData();
   }, [user, token, navigate]);
 
@@ -101,31 +101,85 @@ const Workspace = () => {
     navigate("/login");
   };
 
-  const handleFileChange = (e) => {
-    setSelectedFiles([...e.target.files]);
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return;
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          query: `
+            mutation ($name: String!) {
+              createFolder(name: $name) {
+                folder {
+                  id
+                  name
+                }
+              }
+            }
+          `,
+          variables: { name: newFolderName },
+        }),
+      });
+      const { data, errors } = await response.json();
+      if (errors) throw new Error(errors[0].message);
+      setFolders((prev) => [data.createFolder.folder, ...prev]);
+      setNewFolderName("");
+      setIsModalOpen(false);
+      toast.success("Folder created successfully");
+    } catch (err) {
+      toast.error(err.message);
+    }
   };
 
-  const handleUpload = async () => {
+  // ✅ Handle file upload immediately when selected
+  const handleUpload = async (e) => {
+    const selectedFiles = e.target.files;
     if (!selectedFiles.length) return;
 
     const formData = new FormData();
-    selectedFiles.forEach((file) => formData.append("file", file));
+
+    // The GraphQL mutation
+    formData.append(
+      "operations",
+      JSON.stringify({
+        query: `
+          mutation ($files: [Upload!]!) {
+            uploadFile(files: $files) {
+              success
+              message
+            }
+          }
+        `,
+        variables: { files: new Array(selectedFiles.length).fill(null) },
+      })
+    );
+
+    // Map files to variables
+    const map = {};
+    Array.from(selectedFiles).forEach((_, i) => {
+      map[i] = [`variables.files.${i}`];
+    });
+    formData.append("map", JSON.stringify(map));
+
+    // Attach files
+    Array.from(selectedFiles).forEach((file, i) => {
+      formData.append(i, file);
+    });
 
     try {
-      const response = await fetch(
-        "https://cryogena-backend.onrender.com/graphql/",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        }
-      );
-      if (!response.ok) throw new Error("Upload failed");
-      alert("File uploaded successfully!");
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const result = await response.json();
+      if (result.errors) throw new Error(result.errors[0].message);
+
+      toast.success(result.data.uploadFile.message || "Files uploaded!");
+      fetchWorkspaceData(); // Refresh file list
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -186,15 +240,9 @@ const Workspace = () => {
                 type="file"
                 multiple
                 className="hidden"
-                onChange={handleFileChange}
+                onChange={handleUpload}
               />
             </label>
-            <button
-              onClick={handleUpload}
-              className="bg-green-600 px-4 py-2 rounded"
-            >
-              Save Upload
-            </button>
           </div>
         </div>
 

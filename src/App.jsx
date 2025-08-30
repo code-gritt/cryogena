@@ -1,4 +1,5 @@
 import { Routes, Route } from "react-router-dom";
+import { Toaster } from "react-hot-toast"; // ✅ import toaster
 import Navbar from "./components/Navbar";
 import HeroSection from "./components/HeroSection";
 import FeatureSection from "./components/FeatureSection";
@@ -27,11 +28,22 @@ function App() {
   return (
     <div className="bg-neutral-900 min-h-screen">
       <Navbar />
+
+      {/* ✅ React Hot Toast global provider */}
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: "#333",
+            color: "#fff",
+          },
+        }}
+      />
+
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/workspace" element={<Workspace />} />
         <Route
