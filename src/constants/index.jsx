@@ -24,99 +24,99 @@ export const testimonials = [
     user: "John Doe",
     company: "Stellar Solutions",
     image: user1,
-    text: "I am extremely satisfied with the services provided. The team was responsive, professional, and delivered results beyond my expectations.",
+    text: "Cryogena has transformed the way we manage our files across the organization. Secure, fast, and extremely reliable.",
   },
   {
     user: "Jane Smith",
     company: "Blue Horizon Technologies",
     image: user2,
-    text: "I couldn't be happier with the outcome of our project. The team's creativity and problem-solving skills were instrumental in bringing our vision to life",
+    text: "With Cryogena, sharing files and collaborating with my team has never been easier. The role-based access keeps everything secure.",
   },
   {
     user: "David Johnson",
     company: "Quantum Innovations",
     image: user3,
-    text: "Working with this company was a pleasure. Their attention to detail and commitment to excellence are commendable. I would highly recommend them to anyone looking for top-notch service.",
+    text: "Cryogena's intuitive interface and trash/favorites feature make file management effortless. Highly recommended for any organization.",
   },
   {
     user: "Ronee Brown",
     company: "Fusion Dynamics",
     image: user4,
-    text: "Working with the team at XYZ Company was a game-changer for our project. Their attention to detail and innovative solutions helped us achieve our goals faster than we thought possible. We are grateful for their expertise and professionalism!",
+    text: "Our workflow has drastically improved since adopting Cryogena. Scheduled deletes and analytics give us complete control over our data.",
   },
   {
     user: "Michael Wilson",
     company: "Visionary Creations",
     image: user5,
-    text: "I am amazed by the level of professionalism and dedication shown by the team. They were able to exceed our expectations and deliver outstanding results.",
+    text: "Cryogena combines security, speed, and simplicity in a way no other file storage solution does. It’s essential for our daily operations.",
   },
   {
     user: "Emily Davis",
     company: "Synergy Systems",
     image: user6,
-    text: "The team went above and beyond to ensure our project was a success. Their expertise and dedication are unmatched. I look forward to working with them again in the future.",
+    text: "We love Cryogena! Managing files, setting permissions, and collaborating in real-time is smooth and hassle-free.",
   },
 ];
 
 export const features = [
   {
     icon: <BotMessageSquare />,
-    text: "Drag-and-Drop Interface",
+    text: "Drag-and-Drop Uploads",
     description:
-      "Easily design and arrange your VR environments with a user-friendly drag-and-drop interface.",
+      "Easily upload and organize files with Cryogena's intuitive drag-and-drop interface.",
   },
   {
     icon: <Fingerprint />,
-    text: "Multi-Platform Compatibility",
+    text: "Role-Based Access",
     description:
-      "Build VR applications that run seamlessly across multiple platforms, including mobile, desktop, and VR headsets.",
+      "Control who can view, edit, or delete files with granular role-based permissions.",
   },
   {
     icon: <ShieldHalf />,
-    text: "Built-in Templates",
+    text: "Secure Storage",
     description:
-      "Jumpstart your VR projects with a variety of built-in templates for different types of applications and environments.",
+      "All files are encrypted and stored securely, ensuring your data is safe from unauthorized access.",
   },
   {
     icon: <BatteryCharging />,
-    text: "Real-Time Preview",
+    text: "Real-Time Sync",
     description:
-      "Preview your VR application in real-time as you make changes, allowing for quick iterations and adjustments.",
+      "Files are synced instantly across devices, so your team always has access to the latest version.",
   },
   {
     icon: <PlugZap />,
-    text: "Collaboration Tools",
+    text: "Team Collaboration",
     description:
-      "Work together with your team in real-time on VR projects, enabling seamless collaboration and idea sharing.",
+      "Share files, leave comments, and work together seamlessly within Cryogena.",
   },
   {
     icon: <GlobeLock />,
-    text: "Analytics Dashboard",
+    text: "Analytics & Monitoring",
     description:
-      "Gain valuable insights into user interactions and behavior within your VR applications with an integrated analytics dashboard.",
+      "Track file usage, user activity, and system performance with built-in analytics tools.",
   },
 ];
 
 export const checklistItems = [
   {
-    title: "Code merge made easy",
+    title: "Organize files effortlessly",
     description:
-      "Track the performance of your VR apps and gain insights into user behavior.",
+      "Drag, drop, and categorize your files with Cryogena's simple interface.",
   },
   {
-    title: "Review code without worry",
+    title: "Manage user roles securely",
     description:
-      "Track the performance of your VR apps and gain insights into user behavior.",
+      "Set custom permissions for each team member and protect sensitive data.",
   },
   {
-    title: "AI Assistance to reduce time",
+    title: "Automated cleanup",
     description:
-      "Track the performance of your VR apps and gain insights into user behavior.",
+      "Schedule automatic deletion of old or unwanted files to keep storage optimized.",
   },
   {
-    title: "Share work in minutes",
+    title: "Favorites and Trash",
     description:
-      "Track the performance of your VR apps and gain insights into user behavior.",
+      "Quickly mark important files as favorites or recover deleted items from trash.",
   },
 ];
 
@@ -125,30 +125,20 @@ export const pricingOptions = [
     title: "Free",
     price: "$0",
     features: [
-      "Private board sharing",
-      "5 Gb Storage",
-      "Web Analytics",
-      "Private Mode",
+      "5 GB Storage",
+      "Basic File Management",
+      "Trash & Favorites",
+      "Single Organization",
     ],
   },
   {
     title: "Pro",
     price: "$10",
     features: [
-      "Private board sharing",
-      "10 Gb Storage",
-      "Web Analytics (Advance)",
-      "Private Mode",
-    ],
-  },
-  {
-    title: "Enterprise",
-    price: "$200",
-    features: [
-      "Private board sharing",
-      "Unlimited Storage",
-      "High Performance Network",
-      "Private Mode",
+      "50 GB Storage",
+      "Advanced File Sharing",
+      "Role-Based Permissions",
+      "Analytics Dashboard",
     ],
   },
 ];
@@ -158,7 +148,7 @@ export const resourcesLinks = [
   { href: "#", text: "Documentation" },
   { href: "#", text: "Tutorials" },
   { href: "#", text: "API Reference" },
-  { href: "#", text: "Community Forums" },
+  { href: "#", text: "Community Forum" },
 ];
 
 export const platformLinks = [
