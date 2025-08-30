@@ -2,13 +2,11 @@ import graphene
 from graphene_django import DjangoObjectType
 from django.contrib.auth import authenticate
 from .models import CustomUser, File, Folder
-from django.db.models import Sum, Count, Q
-from rest_framework_simplejwt.tokens import RefreshToken
-from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
-from dj_rest_auth.registration.views import SocialLoginView
-from django.test import RequestFactory
-from .views import GoogleLogin
-import requests
+from django.db.models import Sum, Count
+from allauth.socialaccount.providers.google.provider import GoogleProvider
+from allauth.socialaccount.models import SocialLogin, SocialAccount, SocialToken
+from allauth.socialaccount.providers.oauth2.client import OAuth2Client, OAuth2Error
+from allauth.socialaccount.helpers import complete_social_login
 
 
 # -------------------------
@@ -104,30 +102,49 @@ class GoogleLoginMutation(graphene.Mutation):
     token = graphene.String()
 
     def mutate(self, info, access_token):
-        # Verify the token with Google
-        response = requests.get(
-            "https://oauth2.googleapis.com/tokeninfo",
-            params={"id_token": access_token}
-        )
-        data = response.json()
-
-        if "email" not in data:
-            raise Exception("Invalid Google token")
-
-        email = data["email"]
-        username = data.get("name") or email.split("@")[0]
-
-        # Get or create the user
-        user, created = CustomUser.objects.get_or_create(
-            email=email,
-            defaults={"username": username}
-        )
-
-        # Generate JWT token
-        refresh = RefreshToken.for_user(user)
-        token = str(refresh.access_token)
-
-        return GoogleLoginMutation(user=user, token=token)
+        try:
+            provider = GoogleProvider(info.context)
+            app = provider.get_app(info.context)
+            client = OAuth2Client(
+                request=info.context,
+                consumer_key=app.client_id,
+                consumer_secret=app.secret,
+                access_token_url="https://oauth2.googleapis.com/token",
+                authorize_url="https://accounts.google.com/o/oauth2/v2/auth",
+                api_base_url="https://www.googleapis.com/oauth2/v1/",
+            )
+            user_data = client.get_profile_info(access_token)
+            social_account, created = SocialAccount.objects.get_or_create(
+                provider=provider.id,
+                uid=user_data.get("sub"),
+                defaults={"extra_data": user_data}
+            )
+            if created:
+                user = CustomUser(
+                    email=user_data.get("email"),
+                    username=user_data.get(
+                        "name", user_data.get("email").split("@")[0]),
+                    avatar_initials="".join(
+                        word[0].upper() for word in user_data.get("name", user_data.get("email").split("@")[0]).split()[:2]
+                    ),
+                    credits=100,
+                )
+                user.save()
+                social_account.user = user
+                social_account.save()
+            else:
+                user = social_account.user
+            social_login = SocialLogin(account=social_account, user=user)
+            complete_social_login(info.context, social_login)
+            SocialToken.objects.update_or_create(
+                account=social_account,
+                defaults={"token": access_token,
+                          "token_secret": "", "expires_at": None},
+            )
+            token = str(user.id)  # Simplified demo token
+            return GoogleLoginMutation(user=user, token=token)
+        except Exception as e:
+            raise Exception(f"Google login failed: {str(e)}")
 # -------------------------
 # GraphQL Mutation & Query
 # -------------------------

@@ -22,9 +22,7 @@ const Login = () => {
         "https://cryogena-backend.onrender.com/graphql/",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             query: `
             mutation Login($email: String!, $password: String!) {
@@ -46,7 +44,6 @@ const Login = () => {
       );
 
       const { data, errors } = await response.json();
-
       if (errors) {
         setError(errors[0].message);
         setLoading(false);
@@ -73,9 +70,7 @@ const Login = () => {
         "https://cryogena-backend.onrender.com/graphql/",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             query: `
             mutation GoogleLogin($accessToken: String!) {
@@ -97,7 +92,6 @@ const Login = () => {
       );
 
       const { data, errors } = await response.json();
-
       if (errors) {
         setError(errors[0].message);
         setLoading(false);

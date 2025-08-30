@@ -10,8 +10,13 @@ const useUserStore = create(
       clearUser: () => set({ user: null, token: null }),
     }),
     {
-      name: "user-storage", // key in localStorage
-      getStorage: () => localStorage, // optional, defaults to localStorage
+      name: "user-storage",
+      storage: {
+        getItem: (name) => JSON.parse(localStorage.getItem(name) || "{}"),
+        setItem: (name, value) =>
+          localStorage.setItem(name, JSON.stringify(value)),
+        removeItem: (name) => localStorage.removeItem(name),
+      },
     }
   )
 );

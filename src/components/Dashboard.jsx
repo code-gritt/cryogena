@@ -28,16 +28,17 @@ const Dashboard = () => {
     mp3sCount: 0,
     videosCount: 0,
     totalStorageUsed: 0,
-    storageLimit: 0,
+    storageLimit: 1, // Avoid divide by zero
   });
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { user, clearUser } = useUserStore();
+  const { user, token, clearUser } = useUserStore();
   const navigate = useNavigate();
 
+  // Fetch Dashboard Data
   useEffect(() => {
-    if (!user) {
+    if (!user || !token) {
       navigate("/login");
       return;
     }
@@ -47,14 +48,18 @@ const Dashboard = () => {
       setError("");
 
       try {
+        const endpoint = "https://cryogena-backend.onrender.com/graphql/";
+        const headers = {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // Include token
+        };
+
         // Fetch stats
-        const statsResponse = await fetch(
-          "https://cryogena-backend.onrender.com/graphql/",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              query: `
+        const statsResponse = await fetch(endpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            query: `
               query {
                 dashboardStats {
                   imagesCount
@@ -68,22 +73,20 @@ const Dashboard = () => {
                 }
               }
             `,
-            }),
-          }
-        );
+          }),
+        });
+
         const { data: statsData, errors: statsErrors } =
           await statsResponse.json();
         if (statsErrors) throw new Error(statsErrors[0].message);
         setStats(statsData.dashboardStats);
 
         // Fetch files
-        const filesResponse = await fetch(
-          "https://cryogena-backend.onrender.com/graphql/",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              query: `
+        const filesResponse = await fetch(endpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            query: `
               query {
                 userFiles {
                   id
@@ -94,32 +97,34 @@ const Dashboard = () => {
                 }
               }
             `,
-            }),
-          }
-        );
+          }),
+        });
+
         const { data: filesData, errors: filesErrors } =
           await filesResponse.json();
         if (filesErrors) throw new Error(filesErrors[0].message);
         setFiles(filesData.userFiles);
       } catch (err) {
-        setError(err.message);
+        setError(err.message || "Something went wrong.");
       } finally {
         setLoading(false);
       }
     };
 
     fetchDashboardData();
-  }, [user, navigate]);
+  }, [user, token, navigate]);
 
+  // Logout handler
   const handleLogout = () => {
     clearUser();
     navigate("/login");
   };
 
+  // Storage progress
   const progress = (stats.totalStorageUsed / stats.storageLimit) * 100;
   const isFull = progress >= 100;
 
-  // ✅ TanStack v8 columns
+  // TanStack v8 columns
   const columns = [
     { accessorKey: "id", header: "ID" },
     { accessorKey: "name", header: "Uploaded File Name" },
@@ -133,7 +138,7 @@ const Dashboard = () => {
       ),
     },
     { accessorKey: "createdAt", header: "Timestamp" },
-    { accessorKey: "size", header: "Size" },
+    { accessorKey: "size", header: "Size (bytes)" },
     {
       header: "Actions",
       cell: () => (
@@ -159,20 +164,31 @@ const Dashboard = () => {
     },
   ];
 
-  // ✅ TanStack v8 table instance
+  // Table instance
   const table = useReactTable({
     data: files,
     columns,
     getCoreRowModel: getCoreRowModel(),
   });
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
+  // Render states
+  if (loading)
+    return (
+      <div className="flex justify-center items-center h-screen text-white">
+        Loading...
+      </div>
+    );
+  if (error)
+    return (
+      <div className="flex justify-center items-center h-screen text-red-500">
+        Error: {error}
+      </div>
+    );
 
   return (
     <div className="flex min-h-screen bg-neutral-900">
       {/* Sidebar */}
-      <div className="w-64 bg-neutral-800 p-4 flex flex-col space-y-4">
+      <aside className="w-64 bg-neutral-800 p-4 flex flex-col space-y-4">
         <a
           href="/workspace"
           className="flex items-center text-white hover:text-orange-500"
@@ -191,13 +207,15 @@ const Dashboard = () => {
         >
           <Trash2 size={20} className="mr-2" /> Bin
         </a>
+
+        {/* Storage Indicator */}
         <div className="text-white">
-          Storage
+          <p>Storage</p>
           <div className="w-full bg-neutral-700 rounded-full h-2.5 mt-2">
             <div
               className="bg-orange-500 h-2.5 rounded-full"
               style={{ width: `${progress}%` }}
-            ></div>
+            />
           </div>
           <p className="text-sm text-neutral-400 mt-1">
             {stats.totalStorageUsed} / {stats.storageLimit} bytes used
@@ -211,44 +229,42 @@ const Dashboard = () => {
             </a>
           )}
         </div>
-      </div>
+      </aside>
 
       {/* Main Section */}
-      <div className="flex-1 p-8">
+      <main className="flex-1 p-8">
         <h1 className="text-3xl font-bold text-white mb-6">Dashboard</h1>
 
-        {/* Statistics */}
+        {/* Stats Grid */}
         <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="bg-neutral-800 p-4 rounded-lg text-center">
-            <Image size={32} className="text-orange-500 mx-auto mb-2" />
-            <p className="text-white font-bold">{stats.imagesCount}</p>
-            <p className="text-neutral-400">Images</p>
-          </div>
-          <div className="bg-neutral-800 p-4 rounded-lg text-center">
-            <FileText size={32} className="text-orange-500 mx-auto mb-2" />
-            <p className="text-white font-bold">
-              {stats.pdfsCount + stats.docsCount}
-            </p>
-            <p className="text-neutral-400">Documents/PDFs</p>
-          </div>
-          <div className="bg-neutral-800 p-4 rounded-lg text-center">
-            <Folder size={32} className="text-orange-500 mx-auto mb-2" />
-            <p className="text-white font-bold">{stats.foldersCount}</p>
-            <p className="text-neutral-400">Folders</p>
-          </div>
-          <div className="bg-neutral-800 p-4 rounded-lg text-center">
-            <Music size={32} className="text-orange-500 mx-auto mb-2" />
-            <p className="text-white font-bold">{stats.mp3sCount}</p>
-            <p className="text-neutral-400">MP3 Audio</p>
-          </div>
-          <div className="bg-neutral-800 p-4 rounded-lg text-center">
-            <Video size={32} className="text-orange-500 mx-auto mb-2" />
-            <p className="text-white font-bold">{stats.videosCount}</p>
-            <p className="text-neutral-400">Videos</p>
-          </div>
+          <StatCard
+            icon={<Image size={32} />}
+            label="Images"
+            value={stats.imagesCount}
+          />
+          <StatCard
+            icon={<FileText size={32} />}
+            label="Documents/PDFs"
+            value={stats.pdfsCount + stats.docsCount}
+          />
+          <StatCard
+            icon={<Folder size={32} />}
+            label="Folders"
+            value={stats.foldersCount}
+          />
+          <StatCard
+            icon={<Music size={32} />}
+            label="MP3 Audio"
+            value={stats.mp3sCount}
+          />
+          <StatCard
+            icon={<Video size={32} />}
+            label="Videos"
+            value={stats.videosCount}
+          />
         </div>
 
-        {/* ✅ TanStack Table */}
+        {/* Files Table */}
         <div className="bg-neutral-800 rounded-lg overflow-hidden">
           <table className="w-full text-white">
             <thead className="bg-neutral-700">
@@ -283,9 +299,18 @@ const Dashboard = () => {
             </tbody>
           </table>
         </div>
-      </div>
+      </main>
     </div>
   );
 };
+
+// Reusable stat card
+const StatCard = ({ icon, label, value }) => (
+  <div className="bg-neutral-800 p-4 rounded-lg text-center">
+    <div className="text-orange-500 mx-auto mb-2">{icon}</div>
+    <p className="text-white font-bold">{value}</p>
+    <p className="text-neutral-400">{label}</p>
+  </div>
+);
 
 export default Dashboard;

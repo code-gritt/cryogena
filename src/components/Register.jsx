@@ -23,9 +23,7 @@ const Register = () => {
         "https://cryogena-backend.onrender.com/graphql/",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             query: `
             mutation Register($username: String!, $email: String!, $password: String!) {
@@ -47,7 +45,6 @@ const Register = () => {
       );
 
       const { data, errors } = await response.json();
-
       if (errors) {
         setError(errors[0].message);
         setLoading(false);
@@ -74,9 +71,7 @@ const Register = () => {
         "https://cryogena-backend.onrender.com/graphql/",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             query: `
             mutation GoogleLogin($accessToken: String!) {
@@ -98,7 +93,6 @@ const Register = () => {
       );
 
       const { data, errors } = await response.json();
-
       if (errors) {
         setError(errors[0].message);
         setLoading(false);
@@ -117,11 +111,7 @@ const Register = () => {
   };
 
   return (
-    <GoogleOAuthProvider
-      clientId={
-        "312036655117-mgu1ipt67ktr2gqg6q6ljd32n3vs0paj.apps.googleusercontent.com"
-      }
-    >
+    <GoogleOAuthProvider clientId={process.env.VITE_GOOGLE_CLIENT_ID}>
       <div className="min-h-screen flex items-center justify-center bg-neutral-900">
         {loading && (
           <div className="fixed inset-0 bg-opacity-10 backdrop-blur-sm flex items-center justify-center z-50">
