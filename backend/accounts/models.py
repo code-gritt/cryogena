@@ -31,6 +31,7 @@ class Folder(models.Model):
     parent = models.ForeignKey(
         'self', null=True, blank=True, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_deleted = models.BooleanField(default=False)  # For bin
 
 
 class File(models.Model):
@@ -40,7 +41,7 @@ class File(models.Model):
         Folder, null=True, blank=True, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     size = models.IntegerField(default=0)  # in bytes
-    # e.g., 'image', 'pdf', 'doc', 'folder', 'mp3', 'video'
+    # e.g., 'image', 'pdf', 'doc', 'mp3', 'video'
     file_type = models.CharField(max_length=50)
     file = models.FileField(
         upload_to='uploads/%Y/%m/%d/', null=True, blank=True)

@@ -51,7 +51,7 @@ class FileType(DjangoObjectType):
 class FolderType(DjangoObjectType):
     class Meta:
         model = Folder
-        fields = ("id", "name", "created_at")
+        fields = ("id", "name", "created_at", "parent")
 
 # Dashboard stats type
 
@@ -72,6 +72,14 @@ class DashboardStatsType(graphene.ObjectType):
 class FolderContentsType(graphene.ObjectType):
     files = graphene.List(FileType)
     folders = graphene.List(FolderType)
+
+# Fetch folder info type
+
+
+class FolderInfoType(graphene.ObjectType):
+    id = graphene.ID()
+    name = graphene.String()
+    parent_id = graphene.ID()
 
 # Upload file mutation
 
@@ -101,7 +109,8 @@ class UploadFileMutation(graphene.Mutation):
         folder = None
         if folder_id:
             try:
-                folder = Folder.objects.get(id=folder_id, owner=user)
+                folder = Folder.objects.get(
+                    id=folder_id, owner=user, is_deleted=False)
             except Folder.DoesNotExist:
                 raise Exception("Folder not found")
 
@@ -146,7 +155,8 @@ class CreateFolderMutation(graphene.Mutation):
         parent = None
         if parent_id:
             try:
-                parent = Folder.objects.get(id=parent_id, owner=user)
+                parent = Folder.objects.get(
+                    id=parent_id, owner=user, is_deleted=False)
             except Folder.DoesNotExist:
                 raise Exception("Parent folder not found")
 
@@ -176,6 +186,29 @@ class RenameFileMutation(graphene.Mutation):
             raise Exception("File not found")
 
 
+class RenameFolderMutation(graphene.Mutation):
+    class Arguments:
+        folder_id = graphene.ID(required=True)
+        new_name = graphene.String(required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    def mutate(self, info, folder_id, new_name):
+        user = info.context.user
+        if user.is_anonymous:
+            raise Exception("Not authenticated")
+
+        try:
+            folder = Folder.objects.get(
+                id=folder_id, owner=user, is_deleted=False)
+            folder.name = new_name
+            folder.save()
+            return RenameFolderMutation(success=True, message="Folder renamed successfully")
+        except Folder.DoesNotExist:
+            raise Exception("Folder not found")
+
+
 class DeleteFileMutation(graphene.Mutation):
     class Arguments:
         file_id = graphene.ID(required=True)
@@ -195,6 +228,34 @@ class DeleteFileMutation(graphene.Mutation):
             return DeleteFileMutation(success=True, message="File moved to bin")
         except File.DoesNotExist:
             raise Exception("File not found")
+
+
+class DeleteFolderMutation(graphene.Mutation):
+    class Arguments:
+        folder_id = graphene.ID(required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    def mutate(self, info, folder_id):
+        user = info.context.user
+        if user.is_anonymous:
+            raise Exception("Not authenticated")
+
+        try:
+            folder = Folder.objects.get(
+                id=folder_id, owner=user, is_deleted=False)
+            folder.is_deleted = True
+            folder.save()
+            # Soft-delete all files in the folder
+            File.objects.filter(folder=folder, owner=user,
+                                is_deleted=False).update(is_deleted=True)
+            # Soft-delete all subfolders
+            Folder.objects.filter(parent=folder, owner=user,
+                                  is_deleted=False).update(is_deleted=True)
+            return DeleteFolderMutation(success=True, message="Folder moved to bin")
+        except Folder.DoesNotExist:
+            raise Exception("Folder not found")
 
 # Auth mutations
 
@@ -272,6 +333,8 @@ class Mutation(graphene.ObjectType):
     create_folder = CreateFolderMutation.Field()
     rename_file = RenameFileMutation.Field()
     delete_file = DeleteFileMutation.Field()
+    rename_folder = RenameFolderMutation.Field()
+    delete_folder = DeleteFolderMutation.Field()
 
 
 class Query(graphene.ObjectType):
@@ -281,6 +344,8 @@ class Query(graphene.ObjectType):
     user_folders = graphene.List(FolderType)
     folder_contents = graphene.Field(
         FolderContentsType, folder_id=graphene.ID(required=True))
+    folder_info = graphene.Field(
+        FolderInfoType, folder_id=graphene.ID(required=True))
 
     def resolve_me(self, info):
         user = info.context.user
@@ -293,7 +358,7 @@ class Query(graphene.ObjectType):
         if user.is_anonymous:
             raise Exception("Not authenticated")
         files = File.objects.filter(owner=user, is_deleted=False)
-        folders = Folder.objects.filter(owner=user)
+        folders = Folder.objects.filter(owner=user, is_deleted=False)
         return DashboardStatsType(
             images_count=files.filter(file_type='image').count(),
             pdfs_count=files.filter(file_type='pdf').count(),
@@ -316,22 +381,38 @@ class Query(graphene.ObjectType):
         user = info.context.user
         if user.is_anonymous:
             raise Exception("Not authenticated")
-        return Folder.objects.filter(owner=user).order_by('-created_at')
+        return Folder.objects.filter(owner=user, is_deleted=False).order_by('-created_at')
 
     def resolve_folder_contents(self, info, folder_id):
         user = info.context.user
         if user.is_anonymous:
             raise Exception("Not authenticated")
         try:
-            folder = Folder.objects.get(id=folder_id, owner=user)
+            folder = Folder.objects.get(
+                id=folder_id, owner=user, is_deleted=False)
         except Folder.DoesNotExist:
             raise Exception("Folder not found or not accessible")
         return FolderContentsType(
             files=File.objects.filter(
                 owner=user, folder_id=folder_id, is_deleted=False).order_by('-created_at'),
             folders=Folder.objects.filter(
-                owner=user, parent_id=folder_id).order_by('-created_at')
+                owner=user, parent_id=folder_id, is_deleted=False).order_by('-created_at')
         )
+
+    def resolve_folder_info(self, info, folder_id):
+        user = info.context.user
+        if user.is_anonymous:
+            raise Exception("Not authenticated")
+        try:
+            folder = Folder.objects.get(
+                id=folder_id, owner=user, is_deleted=False)
+            return FolderInfoType(
+                id=folder.id,
+                name=folder.name,
+                parent_id=folder.parent_id if folder.parent else None
+            )
+        except Folder.DoesNotExist:
+            raise Exception("Folder not found or not accessible")
 
 
 schema = graphene.Schema(query=Query, mutation=Mutation)

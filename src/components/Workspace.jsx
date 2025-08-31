@@ -13,6 +13,7 @@ import {
   FileText,
   Music,
   Video,
+  ArrowLeft,
 } from "lucide-react";
 import useUserStore from "../../store/userStore";
 import toast from "react-hot-toast";
@@ -20,6 +21,7 @@ import toast from "react-hot-toast";
 const Workspace = () => {
   const [files, setFiles] = useState([]);
   const [folders, setFolders] = useState([]);
+  const [currentFolder, setCurrentFolder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -28,7 +30,9 @@ const Workspace = () => {
   const [selectedFolderId, setSelectedFolderId] = useState(null);
   const [newFolderName, setNewFolderName] = useState("");
   const [dropdownFileId, setDropdownFileId] = useState(null);
+  const [dropdownFolderId, setDropdownFolderId] = useState(null);
   const [renameFileId, setRenameFileId] = useState(null);
+  const [renameFolderId, setRenameFolderId] = useState(null);
   const [newFileName, setNewFileName] = useState("");
   const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({
@@ -54,6 +58,7 @@ const Workspace = () => {
 
     try {
       if (folderId) {
+        // Fetch folder-specific contents
         const response = await fetch(endpoint, {
           method: "POST",
           headers,
@@ -76,6 +81,11 @@ const Workspace = () => {
                     createdAt
                   }
                 }
+                folderInfo(folderId: $folderId) {
+                  id
+                  name
+                  parentId
+                }
               }
             `,
             variables: { folderId },
@@ -85,7 +95,9 @@ const Workspace = () => {
         if (errors) throw new Error(errors[0].message);
         setFiles(data.folderContents.files);
         setFolders(data.folderContents.folders);
+        setCurrentFolder(data.folderInfo);
       } else {
+        // Fetch root-level files and folders
         const filesResponse = await fetch(endpoint, {
           method: "POST",
           headers,
@@ -129,6 +141,7 @@ const Workspace = () => {
           await foldersResponse.json();
         if (foldersErrors) throw new Error(foldersErrors[0].message);
         setFolders(foldersData.userFolders);
+        setCurrentFolder(null);
       }
     } catch (err) {
       setError(err.message || "Something went wrong.");
@@ -150,6 +163,15 @@ const Workspace = () => {
     navigate(`/workspace/${folderId}`);
   };
 
+  // Handle back button
+  const handleBack = () => {
+    if (currentFolder?.parentId) {
+      navigate(`/workspace/${currentFolder.parentId}`);
+    } else {
+      navigate("/workspace");
+    }
+  };
+
   // Handle right-click context menu
   const handleContextMenu = (e) => {
     e.preventDefault();
@@ -162,7 +184,9 @@ const Workspace = () => {
     const handleClickOutside = () => {
       setIsContextMenuOpen(false);
       setDropdownFileId(null);
+      setDropdownFolderId(null);
       setRenameFileId(null);
+      setRenameFolderId(null);
     };
     document.addEventListener("click", handleClickOutside);
     return () => document.removeEventListener("click", handleClickOutside);
@@ -293,71 +317,115 @@ const Workspace = () => {
     }
   };
 
-  // Rename File
-  const handleRename = async (fileId, newName) => {
+  // Rename File or Folder
+  const handleRename = async (id, newName, isFolder = false) => {
     setLoading(true);
     try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          query: `
+      const query = isFolder
+        ? `
+            mutation ($folderId: ID!, $newName: String!) {
+              renameFolder(folderId: $folderId, newName: $newName) {
+                success
+                message
+              }
+            }
+          `
+        : `
             mutation ($fileId: ID!, $newName: String!) {
               renameFile(fileId: $fileId, newName: $newName) {
                 success
                 message
               }
             }
-          `,
-          variables: { fileId, newName },
-        }),
+          `;
+      const variables = isFolder
+        ? { folderId: id, newName }
+        : { fileId: id, newName };
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ query, variables }),
       });
       const { data, errors } = await response.json();
       if (errors) throw new Error(errors[0].message);
-      if (data.renameFile.success) {
-        setFiles(
-          files.map((f) => (f.id === fileId ? { ...f, name: newName } : f))
-        );
+      if (data[isFolder ? "renameFolder" : "renameFile"].success) {
+        if (isFolder) {
+          setFolders(
+            folders.map((f) => (f.id === id ? { ...f, name: newName } : f))
+          );
+          if (currentFolder?.id === id) {
+            setCurrentFolder({ ...currentFolder, name: newName });
+          }
+        } else {
+          setFiles(
+            files.map((f) => (f.id === id ? { ...f, name: newName } : f))
+          );
+        }
         setRenameFileId(null);
+        setRenameFolderId(null);
         setNewFileName("");
         setDropdownFileId(null);
-        toast.success("File renamed successfully");
+        setDropdownFolderId(null);
+        toast.success(
+          isFolder ? "Folder renamed successfully" : "File renamed successfully"
+        );
       }
     } catch (err) {
-      toast.error(err.message || "Rename failed.");
+      toast.error(
+        err.message ||
+          (isFolder ? "Folder rename failed" : "File rename failed")
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  // Delete File
-  const handleDelete = async (fileId) => {
+  // Delete File or Folder
+  const handleDelete = async (id, isFolder = false) => {
     setLoading(true);
     try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          query: `
+      const query = isFolder
+        ? `
+            mutation ($folderId: ID!) {
+              deleteFolder(folderId: $folderId) {
+                success
+                message
+              }
+            }
+          `
+        : `
             mutation ($fileId: ID!) {
               deleteFile(fileId: $fileId) {
                 success
                 message
               }
             }
-          `,
-          variables: { fileId },
-        }),
+          `;
+      const variables = isFolder ? { folderId: id } : { fileId: id };
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ query, variables }),
       });
       const { data, errors } = await response.json();
       if (errors) throw new Error(errors[0].message);
-      if (data.deleteFile.success) {
-        setFiles(files.filter((f) => f.id !== fileId));
+      if (data[isFolder ? "deleteFolder" : "deleteFile"].success) {
+        if (isFolder) {
+          setFolders(folders.filter((f) => f.id !== id));
+        } else {
+          setFiles(files.filter((f) => f.id !== id));
+        }
         setDropdownFileId(null);
-        toast.success("File moved to bin");
+        setDropdownFolderId(null);
+        toast.success(isFolder ? "Folder moved to bin" : "File moved to bin");
       }
     } catch (err) {
-      toast.error(err.message || "Delete failed.");
+      toast.error(
+        err.message ||
+          (isFolder ? "Folder delete failed" : "File delete failed")
+      );
     } finally {
       setLoading(false);
     }
@@ -412,9 +480,19 @@ const Workspace = () => {
         onContextMenu={handleContextMenu}
       >
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl md:text-3xl font-bold text-white">
-            {folderId ? `Folder Contents` : "Workspace"}
-          </h1>
+          <div className="flex items-center space-x-2">
+            {folderId && (
+              <button
+                onClick={handleBack}
+                className="py-2 px-4 bg-neutral-600 text-white rounded-md hover:bg-neutral-500"
+              >
+                <ArrowLeft size={16} className="inline mr-2" /> Back
+              </button>
+            )}
+            <h1 className="text-2xl md:text-3xl font-bold text-white">
+              {currentFolder ? currentFolder.name : "Workspace"}
+            </h1>
+          </div>
           <div className="flex space-x-2">
             <button
               onClick={() => setIsNewFolderModalOpen(true)}
@@ -441,6 +519,56 @@ const Workspace = () => {
             >
               <Folder size={40} className="text-orange-500 mx-auto mb-2" />
               <p className="text-white text-sm truncate">{folder.name}</p>
+              <button
+                onClick={() => setDropdownFolderId(folder.id)}
+                className="absolute top-2 right-2 text-neutral-400 hover:text-orange-500"
+              >
+                <MoreVertical size={20} />
+              </button>
+              {dropdownFolderId === folder.id && (
+                <div className="absolute top-8 right-2 bg-neutral-700 rounded-md shadow-lg z-10">
+                  <button
+                    onClick={() => {
+                      setRenameFolderId(folder.id);
+                      setNewFileName(folder.name);
+                      setDropdownFolderId(null);
+                    }}
+                    className="block w-full text-left px-4 py-2 text-white hover:bg-neutral-600"
+                  >
+                    Rename
+                  </button>
+                  <button
+                    onClick={() => handleDelete(folder.id, true)}
+                    className="block w-full text-left px-4 py-2 text-white hover:bg-neutral-600"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+              {renameFolderId === folder.id && (
+                <div className="absolute inset-0 bg-neutral-800 p-4 rounded-lg flex flex-col space-y-2">
+                  <input
+                    type="text"
+                    value={newFileName}
+                    onChange={(e) => setNewFileName(e.target.value)}
+                    className="w-full p-2 rounded-md bg-neutral-700 text-white border border-neutral-600 focus:outline-none focus:border-orange-500"
+                  />
+                  <div className="flex justify-end space-x-2">
+                    <button
+                      onClick={() => setRenameFolderId(null)}
+                      className="py-1 px-2 bg-neutral-600 text-white rounded-md"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handleRename(folder.id, newFileName, true)}
+                      className="py-1 px-2 bg-gradient-to-r from-orange-500 to-orange-800 text-white rounded-md"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           {files.map((file) => (
