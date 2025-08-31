@@ -6,7 +6,11 @@ const useUserStore = create(
     (set) => ({
       user: null,
       token: null,
-      setUser: (user, token) => set({ user, token }),
+      setUser: (user, token) =>
+        set((state) => ({
+          user: { ...state.user, ...user }, // ✅ merge updates
+          token: token ?? state.token, // ✅ keep existing token if not passed
+        })),
       clearUser: () => set({ user: null, token: null }),
     }),
     {

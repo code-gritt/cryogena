@@ -49,10 +49,7 @@ function App() {
         <Route path="/workspace" element={<Workspace />} />
         <Route path="/workspace/:folderId" element={<Workspace />} />
         <Route path="/bin" element={<Bin />} />
-        <Route
-          path="/pricing"
-          element={<div>Pricing (To be implemented)</div>}
-        />
+        <Route path="/pricing" element={<Pricing />} />
       </Routes>
     </div>
   );
