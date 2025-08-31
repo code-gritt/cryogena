@@ -391,6 +391,11 @@ const Workspace = () => {
 
   // Move File or Folder
   const handleMove = async (item, targetFolderId) => {
+    console.log(
+      `Moving ${item.type} with ID ${item.id} to folder ${
+        targetFolderId || "root"
+      }`
+    );
     setLoading(true);
     try {
       const query =
@@ -422,13 +427,12 @@ const Workspace = () => {
         body: JSON.stringify({ query, variables }),
       });
       const { data, errors } = await response.json();
-      if (errors) throw new Error(errors[0].message);
+      if (errors) {
+        console.error("Move error:", errors);
+        throw new Error(errors[0].message);
+      }
       if (data[item.type === "folder" ? "moveFolder" : "moveFile"].success) {
-        if (item.type === "folder") {
-          setFolders(folders.filter((f) => f.id !== item.id));
-        } else {
-          setFiles(files.filter((f) => f.id !== item.id));
-        }
+        await fetchWorkspaceData(); // Refresh UI
         toast.success(
           item.type === "folder"
             ? "Folder moved successfully"
@@ -436,6 +440,7 @@ const Workspace = () => {
         );
       }
     } catch (err) {
+      console.error("Move failed:", err.message);
       toast.error(
         err.message ||
           (item.type === "folder" ? "Folder move failed" : "File move failed")
@@ -450,8 +455,18 @@ const Workspace = () => {
 
   // Drag and Drop Handlers
   const handleDragStart = (e, item) => {
+    console.log(`Drag start: ${item.type} ${item.id}`);
     setDraggedItem(item);
     e.dataTransfer.setData("application/json", JSON.stringify(item));
+    e.currentTarget.style.opacity = "0.5"; // Visual feedback
+  };
+
+  const handleDragEnd = (e) => {
+    console.log(`Drag end: ${draggedItem?.type} ${draggedItem?.id}`);
+    e.currentTarget.style.opacity = "1"; // Reset opacity
+    setDraggedItem(null);
+    setDragOverFolderId(null);
+    setIsDraggingOverWorkspace(false);
   };
 
   const handleDragOver = (e) => {
@@ -462,12 +477,14 @@ const Workspace = () => {
   };
 
   const handleDragLeave = () => {
+    console.log("Drag leave workspace");
     setIsDraggingOverWorkspace(false);
     setDragOverFolderId(null);
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
+    console.log("Drop on workspace");
     if (e.dataTransfer.types.includes("Files")) {
       // Handle external file drop
       const droppedFiles = e.dataTransfer.files;
@@ -489,6 +506,7 @@ const Workspace = () => {
       draggedItem.type === "folder" &&
       draggedItem.id === folderId
     ) {
+      console.log("Prevented self-drop on folder", folderId);
       return; // Prevent dropping folder into itself
     }
     setDragOverFolderId(folderId);
@@ -496,6 +514,7 @@ const Workspace = () => {
 
   const handleFolderDrop = (e, folderId) => {
     e.preventDefault();
+    console.log(`Drop on folder ${folderId}`);
     if (
       draggedItem &&
       draggedItem.type === "folder" &&
@@ -603,9 +622,10 @@ const Workspace = () => {
               onDragStart={(e) =>
                 handleDragStart(e, { type: "folder", id: folder.id })
               }
+              onDragEnd={handleDragEnd}
               onDragOver={(e) => handleFolderDragOver(e, folder.id)}
               onDrop={(e) => handleFolderDrop(e, folder.id)}
-              className={`relative bg-neutral-800 p-4 rounded-lg text-center cursor-pointer ${
+              className={`relative bg-neutral-800 p-4 rounded-lg text-center cursor-move ${
                 dragOverFolderId === folder.id
                   ? "border-2 border-orange-500"
                   : ""
@@ -614,10 +634,12 @@ const Workspace = () => {
             >
               <Folder size={40} className="text-orange-500 mx-auto mb-2" />
               <p className="text-white text-sm truncate">{folder.name}</p>
-              <div className="absolute top-2 right-2 flex space-x-2">
+              <div
+                className="absolute top-2 right-2 flex space-x-2"
+                onClick={(e) => e.stopPropagation()} // Prevent drag interference
+              >
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
+                  onClick={() => {
                     setRenameFolderId(folder.id);
                     setRenameFileId(null);
                     setNewFileName(folder.name);
@@ -628,10 +650,7 @@ const Workspace = () => {
                   <Pencil size={20} />
                 </button>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(folder.id, true);
-                  }}
+                  onClick={() => handleDelete(folder.id, true)}
                   className="text-neutral-400 hover:text-orange-500"
                 >
                   <Trash2 size={20} />
@@ -646,7 +665,8 @@ const Workspace = () => {
               onDragStart={(e) =>
                 handleDragStart(e, { type: "file", id: file.id })
               }
-              className="relative bg-neutral-800 p-4 rounded-lg text-center"
+              onDragEnd={handleDragEnd}
+              className="relative bg-neutral-800 p-4 rounded-lg text-center cursor-move"
             >
               {file.fileType === "image" && (
                 <Image size={40} className="text-orange-500 mx-auto mb-2" />
@@ -664,10 +684,12 @@ const Workspace = () => {
                 <Video size={40} className="text-orange-500 mx-auto mb-2" />
               )}
               <p className="text-white text-sm truncate">{file.name}</p>
-              <div className="absolute top-2 right-2 flex space-x-2">
+              <div
+                className="absolute top-2 right-2 flex space-x-2"
+                onClick={(e) => e.stopPropagation()} // Prevent drag interference
+              >
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
+                  onClick={() => {
                     setRenameFileId(file.id);
                     setRenameFolderId(null);
                     setNewFileName(file.name);
@@ -678,10 +700,7 @@ const Workspace = () => {
                   <Pencil size={20} />
                 </button>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(file.id);
-                  }}
+                  onClick={() => handleDelete(file.id)}
                   className="text-neutral-400 hover:text-orange-500"
                 >
                   <Trash2 size={20} />
