@@ -22,7 +22,8 @@ const Workspace = () => {
   const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectedFolderId, setSelectedFolderId] = useState(null);
   const [newFolderName, setNewFolderName] = useState("");
@@ -53,7 +54,6 @@ const Workspace = () => {
 
     try {
       if (folderId) {
-        // Fetch folder-specific contents
         const response = await fetch(endpoint, {
           method: "POST",
           headers,
@@ -86,7 +86,6 @@ const Workspace = () => {
         setFiles(data.folderContents.files);
         setFolders(data.folderContents.folders);
       } else {
-        // Fetch root-level files and folders
         const filesResponse = await fetch(endpoint, {
           method: "POST",
           headers,
@@ -206,10 +205,10 @@ const Workspace = () => {
 
       setFolders([data.createFolder.folder, ...folders]);
       setNewFolderName("");
-      setIsModalOpen(false);
+      setIsNewFolderModalOpen(false);
       setIsContextMenuOpen(false);
       toast.success("Folder created successfully");
-      return data.createFolder.folder.id; // Return folder ID for upload
+      return data.createFolder.folder.id;
     } catch (err) {
       toast.error(err.message);
       return null;
@@ -259,7 +258,7 @@ const Workspace = () => {
         await fetchWorkspaceData();
         setSelectedFiles([]);
         setSelectedFolderId(null);
-        setIsModalOpen(false);
+        setIsUploadModalOpen(false);
         toast.success(data.uploadFile.message);
       }
     } catch (err) {
@@ -272,13 +271,17 @@ const Workspace = () => {
   // Right-Click Upload to New Folder
   const handleUploadToNewFolder = async () => {
     setIsContextMenuOpen(false);
-    setIsModalOpen(true);
+    setIsNewFolderModalOpen(true);
     setNewFolderName("New Folder");
   };
 
   // Handle modal submission (folder creation or file upload)
-  const handleModalSubmit = async () => {
-    if (newFolderName.trim()) {
+  const handleModalSubmit = async (isNewFolderModal) => {
+    if (isNewFolderModal) {
+      if (!newFolderName.trim()) {
+        toast.error("Folder name cannot be empty");
+        return;
+      }
       const newFolderId = await handleCreateFolder();
       if (newFolderId && selectedFiles.length) {
         await handleUpload(selectedFiles, newFolderId);
@@ -286,7 +289,7 @@ const Workspace = () => {
     } else if (selectedFiles.length) {
       await handleUpload(selectedFiles);
     } else {
-      toast.error("Please select files or enter a folder name.");
+      toast.error("Please select files to upload.");
     }
   };
 
@@ -412,12 +415,20 @@ const Workspace = () => {
           <h1 className="text-2xl md:text-3xl font-bold text-white">
             {folderId ? `Folder Contents` : "Workspace"}
           </h1>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="py-2 px-4 bg-gradient-to-r from-orange-500 to-orange-800 text-white rounded-md hover:from-orange-600 hover:to-orange-900"
-          >
-            <Upload size={16} className="inline mr-2" /> Upload
-          </button>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setIsNewFolderModalOpen(true)}
+              className="py-2 px-4 bg-gradient-to-r from-orange-500 to-orange-800 text-white rounded-md hover:from-orange-600 hover:to-orange-900"
+            >
+              <FolderPlus size={16} className="inline mr-2" /> New Folder
+            </button>
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              className="py-2 px-4 bg-gradient-to-r from-orange-500 to-orange-800 text-white rounded-md hover:from-orange-600 hover:to-orange-900"
+            >
+              <Upload size={16} className="inline mr-2" /> Upload
+            </button>
+          </div>
         </div>
 
         {/* File and Folder Grid */}
@@ -521,7 +532,7 @@ const Workspace = () => {
           >
             <button
               onClick={() => {
-                setIsModalOpen(true);
+                setIsNewFolderModalOpen(true);
                 setNewFolderName("New Folder");
                 setIsContextMenuOpen(false);
               }}
@@ -537,70 +548,118 @@ const Workspace = () => {
             </button>
           </div>
         )}
-      </main>
 
-      {/* Upload Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-neutral-800 p-6 rounded-lg w-full max-w-md">
-            <h2 className="text-xl font-bold text-white mb-4">
-              Upload Files or Create Folder
-            </h2>
-            <input
-              type="file"
-              multiple
-              accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.mp3,.mp4"
-              onChange={(e) => setSelectedFiles([...e.target.files])}
-              className="w-full p-2 mb-4 bg-neutral-700 text-white rounded-md"
-              ref={fileInputRef}
-            />
-            <div className="relative mb-4">
+        {/* Upload Modal */}
+        {isUploadModalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-neutral-800 p-6 rounded-lg w-full max-w-md">
+              <h2 className="text-xl font-bold text-white mb-4">
+                Upload Files
+              </h2>
               <input
-                type="text"
-                placeholder="New Folder Name"
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-                className="w-full p-2 rounded-md bg-neutral-700 text-white border border-neutral-600 focus:outline-none focus:border-orange-500"
+                type="file"
+                multiple
+                accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.mp3,.mp4"
+                onChange={(e) => setSelectedFiles([...e.target.files])}
+                className="w-full p-2 mb-4 bg-neutral-700 text-white rounded-md"
+                ref={fileInputRef}
               />
-              <FolderPlus
-                size={20}
-                className="absolute top-2 right-2 text-neutral-400"
-              />
-            </div>
-            <select
-              value={selectedFolderId || ""}
-              onChange={(e) => setSelectedFolderId(e.target.value || null)}
-              className="w-full p-2 mb-4 rounded-md bg-neutral-700 text-white border border-neutral-600 focus:outline-none focus:border-orange-500"
-            >
-              <option value="">No Folder</option>
-              {folders.map((folder) => (
-                <option key={folder.id} value={folder.id}>
-                  {folder.name}
-                </option>
-              ))}
-            </select>
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setSelectedFiles([]);
-                  setNewFolderName("");
-                  setSelectedFolderId(null);
-                }}
-                className="py-2 px-4 bg-neutral-600 text-white rounded-md"
+              <select
+                value={selectedFolderId || ""}
+                onChange={(e) => setSelectedFolderId(e.target.value || null)}
+                className="w-full p-2 mb-4 rounded-md bg-neutral-700 text-white border border-neutral-600 focus:outline-none focus:border-orange-500"
               >
-                Cancel
-              </button>
-              <button
-                onClick={handleModalSubmit}
-                className="py-2 px-4 bg-gradient-to-r from-orange-500 to-orange-800 text-white rounded-md hover:from-orange-600 hover:to-orange-900"
-              >
-                {newFolderName ? "Create Folder" : "Upload"}
-              </button>
+                <option value="">No Folder</option>
+                {folders.map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    {folder.name}
+                  </option>
+                ))}
+              </select>
+              <div className="flex justify-end space-x-2">
+                <button
+                  onClick={() => {
+                    setIsUploadModalOpen(false);
+                    setSelectedFiles([]);
+                    setSelectedFolderId(null);
+                  }}
+                  className="py-2 px-4 bg-neutral-600 text-white rounded-md"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleModalSubmit(false)}
+                  className="py-2 px-4 bg-gradient-to-r from-orange-500 to-orange-800 text-white rounded-md hover:from-orange-600 hover:to-orange-900"
+                >
+                  Upload
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* New Folder Modal */}
+        {isNewFolderModalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-neutral-800 p-6 rounded-lg w-full max-w-md">
+              <h2 className="text-xl font-bold text-white mb-4">
+                Create Folder
+              </h2>
+              <div className="relative mb-4">
+                <input
+                  type="text"
+                  placeholder="New Folder Name"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  className="w-full p-2 rounded-md bg-neutral-700 text-white border border-neutral-600 focus:outline-none focus:border-orange-500"
+                />
+                <FolderPlus
+                  size={20}
+                  className="absolute top-2 right-2 text-neutral-400"
+                />
+              </div>
+              <input
+                type="file"
+                multiple
+                accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.mp3,.mp4"
+                onChange={(e) => setSelectedFiles([...e.target.files])}
+                className="w-full p-2 mb-4 bg-neutral-700 text-white rounded-md"
+              />
+              <select
+                value={selectedFolderId || ""}
+                onChange={(e) => setSelectedFolderId(e.target.value || null)}
+                className="w-full p-2 mb-4 rounded-md bg-neutral-700 text-white border border-neutral-600 focus:outline-none focus:border-orange-500"
+              >
+                <option value="">No Folder</option>
+                {folders.map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    {folder.name}
+                  </option>
+                ))}
+              </select>
+              <div className="flex justify-end space-x-2">
+                <button
+                  onClick={() => {
+                    setIsNewFolderModalOpen(false);
+                    setSelectedFiles([]);
+                    setNewFolderName("");
+                    setSelectedFolderId(null);
+                  }}
+                  className="py-2 px-4 bg-neutral-600 text-white rounded-md"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleModalSubmit(true)}
+                  className="py-2 px-4 bg-gradient-to-r from-orange-500 to-orange-800 text-white rounded-md hover:from-orange-600 hover:to-orange-900"
+                >
+                  Create Folder
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 };
