@@ -1,18 +1,17 @@
-import graphene
-from graphene_django import DjangoObjectType
-from graphene_file_upload.scalars import Upload
-from django.contrib.auth import authenticate
-from .models import CustomUser, File, Folder
-from django.db.models import Sum
-from allauth.socialaccount.models import SocialAccount
-from rest_framework_simplejwt.tokens import RefreshToken
-import os
-from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token
+import os
+from rest_framework_simplejwt.tokens import RefreshToken
+from allauth.socialaccount.models import SocialAccount
+from django.db.models import Sum
+from .models import CustomUser, File, Folder
+from django.contrib.auth import authenticate
+from graphene_file_upload.scalars import Upload
+from graphene_django import DjangoObjectType
+import graphene
+
 
 # Helper to generate JWTs
-
-
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
     return {
@@ -20,17 +19,15 @@ def get_tokens_for_user(user):
         "access": str(refresh.access_token),
     }
 
+
 # User type
-
-
 class UserType(DjangoObjectType):
     class Meta:
         model = CustomUser
         fields = ("id", "username", "email", "credits", "avatar_initials")
 
+
 # File type
-
-
 class FileType(DjangoObjectType):
     class Meta:
         model = File
@@ -45,17 +42,15 @@ class FileType(DjangoObjectType):
     def resolve_file_url(self, info):
         return self.file.url if self.file else ""
 
+
 # Folder type
-
-
 class FolderType(DjangoObjectType):
     class Meta:
         model = Folder
         fields = ("id", "name", "created_at", "parent")
 
+
 # Dashboard stats type
-
-
 class DashboardStatsType(graphene.ObjectType):
     images_count = graphene.Int()
     pdfs_count = graphene.Int()
@@ -66,24 +61,27 @@ class DashboardStatsType(graphene.ObjectType):
     total_storage_used = graphene.Int()
     storage_limit = graphene.Int()
 
+
 # Folder contents type
-
-
 class FolderContentsType(graphene.ObjectType):
     files = graphene.List(FileType)
     folders = graphene.List(FolderType)
 
-# Fetch folder info type
+
+# Bin contents type
+class BinContentsType(graphene.ObjectType):
+    files = graphene.List(FileType)
+    folders = graphene.List(FolderType)
 
 
+# Folder info type
 class FolderInfoType(graphene.ObjectType):
     id = graphene.ID()
     name = graphene.String()
     parent_id = graphene.ID()
 
+
 # Upload file mutation
-
-
 class UploadFileMutation(graphene.Mutation):
     class Arguments:
         files = graphene.List(Upload, required=True)
@@ -137,9 +135,8 @@ class UploadFileMutation(graphene.Mutation):
 
         return UploadFileMutation(success=True, message="Files uploaded successfully")
 
+
 # Folder mutations
-
-
 class CreateFolderMutation(graphene.Mutation):
     class Arguments:
         name = graphene.String(required=True)
@@ -257,9 +254,55 @@ class DeleteFolderMutation(graphene.Mutation):
         except Folder.DoesNotExist:
             raise Exception("Folder not found")
 
+
+class DeleteFileForeverMutation(graphene.Mutation):
+    class Arguments:
+        file_id = graphene.ID(required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    def mutate(self, info, file_id):
+        user = info.context.user
+        if user.is_anonymous:
+            raise Exception("Not authenticated")
+
+        try:
+            file = File.objects.get(id=file_id, owner=user, is_deleted=True)
+            file.delete()
+            return DeleteFileForeverMutation(success=True, message="File permanently deleted")
+        except File.DoesNotExist:
+            raise Exception("File not found in bin")
+
+
+class DeleteFolderForeverMutation(graphene.Mutation):
+    class Arguments:
+        folder_id = graphene.ID(required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    def mutate(self, info, folder_id):
+        user = info.context.user
+        if user.is_anonymous:
+            raise Exception("Not authenticated")
+
+        try:
+            folder = Folder.objects.get(
+                id=folder_id, owner=user, is_deleted=True)
+            # Delete all files in the folder
+            File.objects.filter(folder=folder, owner=user,
+                                is_deleted=True).delete()
+            # Delete all subfolders recursively
+            Folder.objects.filter(parent=folder, owner=user,
+                                  is_deleted=True).delete()
+            folder.delete()
+            return DeleteFolderForeverMutation(success=True, message="Folder permanently deleted")
+        except Folder.DoesNotExist:
+            raise Exception("Folder not found in bin")
+
+
 # Auth mutations
-
-
 class RegisterMutation(graphene.Mutation):
     class Arguments:
         username = graphene.String(required=True)
@@ -322,9 +365,8 @@ class GoogleLoginMutation(graphene.Mutation):
         except Exception as e:
             raise Exception(f"Google login failed: {str(e)}")
 
+
 # Root schema
-
-
 class Mutation(graphene.ObjectType):
     register = RegisterMutation.Field()
     login = LoginMutation.Field()
@@ -335,6 +377,8 @@ class Mutation(graphene.ObjectType):
     delete_file = DeleteFileMutation.Field()
     rename_folder = RenameFolderMutation.Field()
     delete_folder = DeleteFolderMutation.Field()
+    delete_file_forever = DeleteFileForeverMutation.Field()
+    delete_folder_forever = DeleteFolderForeverMutation.Field()
 
 
 class Query(graphene.ObjectType):
@@ -346,6 +390,7 @@ class Query(graphene.ObjectType):
         FolderContentsType, folder_id=graphene.ID(required=True))
     folder_info = graphene.Field(
         FolderInfoType, folder_id=graphene.ID(required=True))
+    bin_contents = graphene.Field(BinContentsType)
 
     def resolve_me(self, info):
         user = info.context.user
@@ -413,6 +458,17 @@ class Query(graphene.ObjectType):
             )
         except Folder.DoesNotExist:
             raise Exception("Folder not found or not accessible")
+
+    def resolve_bin_contents(self, info):
+        user = info.context.user
+        if user.is_anonymous:
+            raise Exception("Not authenticated")
+        return BinContentsType(
+            files=File.objects.filter(
+                owner=user, is_deleted=True).order_by('-created_at'),
+            folders=Folder.objects.filter(
+                owner=user, is_deleted=True).order_by('-created_at')
+        )
 
 
 schema = graphene.Schema(query=Query, mutation=Mutation)
