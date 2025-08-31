@@ -112,6 +112,16 @@ class UploadFileMutation(graphene.Mutation):
             except Folder.DoesNotExist:
                 raise Exception("Folder not found")
 
+        # ⚡ Deduct credits (e.g., 1 credit per file uploaded)
+        cost_per_file = 1
+        total_cost = len(files) * cost_per_file
+
+        if user.credits < total_cost:
+            raise Exception("Not enough credits to upload files")
+
+        user.credits -= total_cost
+        user.save()
+
         # Save files
         for uploaded_file in files:
             file_extension = uploaded_file.name.split('.')[-1].lower()
@@ -133,10 +143,11 @@ class UploadFileMutation(graphene.Mutation):
                 file=uploaded_file
             )
 
-        return UploadFileMutation(success=True, message="Files uploaded successfully")
-
+        return UploadFileMutation(success=True, message="Files uploaded successfully. Credits deducted.")
 
 # Folder mutations
+
+
 class CreateFolderMutation(graphene.Mutation):
     class Arguments:
         name = graphene.String(required=True)
