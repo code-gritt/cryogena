@@ -522,12 +522,6 @@ const Workspace = () => {
               <p className="text-white text-sm truncate">{file.name}</p>
               <div className="absolute top-2 right-2 flex space-x-2">
                 <button
-                  onClick={() => window.open(file.fileUrl, "_blank")}
-                  className="text-neutral-400 hover:text-orange-500"
-                >
-                  <Download size={20} />
-                </button>
-                <button
                   onClick={(e) => {
                     e.stopPropagation();
                     setRenameFileId(file.id);

@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LogOut,
   Trash2,
-  Edit,
+  Pencil,
   Download,
   Folder,
   Image,
@@ -20,6 +20,7 @@ import {
   flexRender,
 } from "@tanstack/react-table";
 import useUserStore from "../../store/userStore";
+import toast from "react-hot-toast";
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -35,9 +36,13 @@ const Dashboard = () => {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+  const [renameFileId, setRenameFileId] = useState(null);
+  const [newFileName, setNewFileName] = useState("");
   const { user, token, clearUser } = useUserStore();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const renameModalRef = useRef(null);
 
   useEffect(() => {
     if (!user || !token) {
@@ -96,6 +101,7 @@ const Dashboard = () => {
                   ownerAvatar
                   createdAt
                   size
+                  fileUrl
                 }
               }
             `,
@@ -116,9 +122,104 @@ const Dashboard = () => {
     fetchDashboardData();
   }, [user, token, navigate]);
 
+  // Close rename modal on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (renameModalRef.current?.contains(e.target)) {
+        return;
+      }
+      setIsRenameModalOpen(false);
+      setRenameFileId(null);
+      setNewFileName("");
+    };
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
   const handleLogout = () => {
     clearUser();
     navigate("/login");
+  };
+
+  // Rename File
+  const handleRename = async (fileId, newName) => {
+    setLoading(true);
+    try {
+      const response = await fetch(
+        "https://cryogena-backend.onrender.com/graphql/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            query: `
+            mutation ($fileId: ID!, $newName: String!) {
+              renameFile(fileId: $fileId, newName: $newName) {
+                success
+                message
+              }
+            }
+          `,
+            variables: { fileId, newName },
+          }),
+        }
+      );
+      const { data, errors } = await response.json();
+      if (errors) throw new Error(errors[0].message);
+      if (data.renameFile.success) {
+        setFiles(
+          files.map((f) => (f.id === fileId ? { ...f, name: newName } : f))
+        );
+        setRenameFileId(null);
+        setNewFileName("");
+        setIsRenameModalOpen(false);
+        toast.success("File renamed successfully");
+      }
+    } catch (err) {
+      toast.error(err.message || "File rename failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Delete File
+  const handleDelete = async (fileId) => {
+    setLoading(true);
+    try {
+      const response = await fetch(
+        "https://cryogena-backend.onrender.com/graphql/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            query: `
+            mutation ($fileId: ID!) {
+              deleteFile(fileId: $fileId) {
+                success
+                message
+              }
+            }
+          `,
+            variables: { fileId },
+          }),
+        }
+      );
+      const { data, errors } = await response.json();
+      if (errors) throw new Error(errors[0].message);
+      if (data.deleteFile.success) {
+        setFiles(files.filter((f) => f.id !== fileId));
+        toast.success("File moved to bin");
+      }
+    } catch (err) {
+      toast.error(err.message || "File delete failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const progress = (stats.totalStorageUsed / stats.storageLimit) * 100;
@@ -140,23 +241,23 @@ const Dashboard = () => {
     { accessorKey: "size", header: "Size (bytes)" },
     {
       header: "Actions",
-      cell: () => (
+      cell: ({ row }) => (
         <div className="flex space-x-2">
-          <Edit
-            size={20}
-            className="text-neutral-400 hover:text-orange-500 cursor-pointer"
-          />
           <Trash2
             size={20}
             className="text-neutral-400 hover:text-orange-500 cursor-pointer"
+            onClick={() => handleDelete(row.original.id)}
           />
         </div>
       ),
     },
     {
       header: "Download",
-      cell: () => (
-        <button className="py-1 px-2 bg-gradient-to-r from-orange-500 to-orange-800 text-white rounded-md hover:from-orange-600 hover:to-orange-900">
+      cell: ({ row }) => (
+        <button
+          onClick={() => window.open(row.original.fileUrl, "_blank")}
+          className="py-1 px-2 bg-gradient-to-r from-orange-500 to-orange-800 text-white rounded-md hover:from-orange-600 hover:to-orange-900"
+        >
           <Download size={16} />
         </button>
       ),
@@ -318,6 +419,42 @@ const Dashboard = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Rename Modal */}
+        {isRenameModalOpen && renameFileId && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div
+              ref={renameModalRef}
+              className="bg-neutral-800 p-6 rounded-lg w-full max-w-md"
+            >
+              <h2 className="text-xl font-bold text-white mb-4">Rename File</h2>
+              <input
+                type="text"
+                value={newFileName}
+                onChange={(e) => setNewFileName(e.target.value)}
+                className="w-full p-2 mb-4 rounded-md bg-neutral-700 text-white border border-neutral-600 focus:outline-none focus:border-orange-500"
+              />
+              <div className="flex justify-end space-x-2">
+                <button
+                  onClick={() => {
+                    setIsRenameModalOpen(false);
+                    setRenameFileId(null);
+                    setNewFileName("");
+                  }}
+                  className="py-2 px-4 bg-neutral-600 text-white rounded-md"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleRename(renameFileId, newFileName)}
+                  className="py-2 px-4 bg-gradient-to-r from-orange-500 to-orange-800 text-white rounded-md hover:from-orange-600 hover:to-orange-900"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
