@@ -5,7 +5,6 @@ import {
   Trash2,
   Download,
   Briefcase,
-  MoreVertical,
   FolderPlus,
   Upload,
   Folder,
@@ -14,6 +13,7 @@ import {
   Music,
   Video,
   ArrowLeft,
+  Pencil,
 } from "lucide-react";
 import useUserStore from "../../store/userStore";
 import toast from "react-hot-toast";
@@ -29,8 +29,6 @@ const Workspace = () => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectedFolderId, setSelectedFolderId] = useState(null);
   const [newFolderName, setNewFolderName] = useState("");
-  const [dropdownFileId, setDropdownFileId] = useState(null);
-  const [dropdownFolderId, setDropdownFolderId] = useState(null);
   const [renameFileId, setRenameFileId] = useState(null);
   const [renameFolderId, setRenameFolderId] = useState(null);
   const [newFileName, setNewFileName] = useState("");
@@ -44,6 +42,7 @@ const Workspace = () => {
   const { folderId } = useParams();
   const mainRef = useRef(null);
   const fileInputRef = useRef(null);
+  const contextMenuRef = useRef(null);
 
   const endpoint = "https://cryogena-backend.onrender.com/graphql/";
   const headers = {
@@ -55,10 +54,8 @@ const Workspace = () => {
   const fetchWorkspaceData = async () => {
     setLoading(true);
     setError("");
-
     try {
       if (folderId) {
-        // Fetch folder-specific contents
         const response = await fetch(endpoint, {
           method: "POST",
           headers,
@@ -66,26 +63,10 @@ const Workspace = () => {
             query: `
               query ($folderId: ID!) {
                 folderContents(folderId: $folderId) {
-                  files {
-                    id
-                    name
-                    ownerAvatar
-                    createdAt
-                    size
-                    fileType
-                    fileUrl
-                  }
-                  folders {
-                    id
-                    name
-                    createdAt
-                  }
+                  files { id name ownerAvatar createdAt size fileType fileUrl }
+                  folders { id name createdAt }
                 }
-                folderInfo(folderId: $folderId) {
-                  id
-                  name
-                  parentId
-                }
+                folderInfo(folderId: $folderId) { id name parentId }
               }
             `,
             variables: { folderId },
@@ -97,24 +78,11 @@ const Workspace = () => {
         setFolders(data.folderContents.folders);
         setCurrentFolder(data.folderInfo);
       } else {
-        // Fetch root-level files and folders
         const filesResponse = await fetch(endpoint, {
           method: "POST",
           headers,
           body: JSON.stringify({
-            query: `
-              query {
-                userFiles {
-                  id
-                  name
-                  ownerAvatar
-                  createdAt
-                  size
-                  fileType
-                  fileUrl
-                }
-              }
-            `,
+            query: `query { userFiles { id name ownerAvatar createdAt size fileType fileUrl } }`,
           }),
         });
         const { data: filesData, errors: filesErrors } =
@@ -126,15 +94,7 @@ const Workspace = () => {
           method: "POST",
           headers,
           body: JSON.stringify({
-            query: `
-              query {
-                userFolders {
-                  id
-                  name
-                  createdAt
-                }
-              }
-            `,
+            query: `query { userFolders { id name createdAt } }`,
           }),
         });
         const { data: foldersData, errors: foldersErrors } =
@@ -158,33 +118,28 @@ const Workspace = () => {
     fetchWorkspaceData();
   }, [user, token, navigate, folderId]);
 
-  // Handle double-click on folder
-  const handleFolderDoubleClick = (folderId) => {
+  // Handle folder navigation
+  const handleFolderDoubleClick = (folderId) =>
     navigate(`/workspace/${folderId}`);
-  };
+  const handleBack = () =>
+    currentFolder?.parentId
+      ? navigate(`/workspace/${currentFolder.parentId}`)
+      : navigate("/workspace");
 
-  // Handle back button
-  const handleBack = () => {
-    if (currentFolder?.parentId) {
-      navigate(`/workspace/${currentFolder.parentId}`);
-    } else {
-      navigate("/workspace");
-    }
-  };
-
-  // Handle right-click context menu
+  // Context menu
   const handleContextMenu = (e) => {
     e.preventDefault();
     setContextMenuPosition({ x: e.clientX, y: e.clientY });
     setIsContextMenuOpen(true);
   };
 
-  // Close context menu on click outside
+  // Close context menu and rename UI
   useEffect(() => {
-    const handleClickOutside = () => {
+    const handleClickOutside = (e) => {
+      if (contextMenuRef.current?.contains(e.target)) {
+        return;
+      }
       setIsContextMenuOpen(false);
-      setDropdownFileId(null);
-      setDropdownFolderId(null);
       setRenameFileId(null);
       setRenameFolderId(null);
     };
@@ -213,11 +168,7 @@ const Workspace = () => {
           query: `
             mutation ($name: String!, $parentId: ID) {
               createFolder(name: $name, parentId: $parentId) {
-                folder {
-                  id
-                  name
-                  createdAt
-                }
+                folder { id name createdAt }
               }
             }
           `,
@@ -365,8 +316,6 @@ const Workspace = () => {
         setRenameFileId(null);
         setRenameFolderId(null);
         setNewFileName("");
-        setDropdownFileId(null);
-        setDropdownFolderId(null);
         toast.success(
           isFolder ? "Folder renamed successfully" : "File renamed successfully"
         );
@@ -417,8 +366,6 @@ const Workspace = () => {
         } else {
           setFiles(files.filter((f) => f.id !== id));
         }
-        setDropdownFileId(null);
-        setDropdownFolderId(null);
         toast.success(isFolder ? "Folder moved to bin" : "File moved to bin");
       }
     } catch (err) {
@@ -431,7 +378,7 @@ const Workspace = () => {
     }
   };
 
-  // Loading UI
+  // Loading state
   if (loading) {
     return (
       <div className="fixed inset-0 bg-opacity-10 backdrop-blur-sm flex items-center justify-center z-50">
@@ -440,7 +387,6 @@ const Workspace = () => {
     );
   }
 
-  // Error UI
   if (error) {
     return (
       <div className="flex justify-center items-center h-screen text-red-500">
@@ -473,12 +419,13 @@ const Workspace = () => {
         </a>
       </aside>
 
-      {/* Main Section */}
+      {/* Main */}
       <main
-        className="flex-1 p-4 md:p-8"
         ref={mainRef}
         onContextMenu={handleContextMenu}
+        className="flex-1 p-4 md:p-8"
       >
+        {/* Top Bar */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center space-x-2">
             {folderId && (
@@ -509,7 +456,7 @@ const Workspace = () => {
           </div>
         </div>
 
-        {/* File and Folder Grid */}
+        {/* Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {folders.map((folder) => (
             <div
@@ -519,32 +466,28 @@ const Workspace = () => {
             >
               <Folder size={40} className="text-orange-500 mx-auto mb-2" />
               <p className="text-white text-sm truncate">{folder.name}</p>
-              <button
-                onClick={() => setDropdownFolderId(folder.id)}
-                className="absolute top-2 right-2 text-neutral-400 hover:text-orange-500"
-              >
-                <MoreVertical size={20} />
-              </button>
-              {dropdownFolderId === folder.id && (
-                <div className="absolute top-8 right-2 bg-neutral-700 rounded-md shadow-lg z-10">
-                  <button
-                    onClick={() => {
-                      setRenameFolderId(folder.id);
-                      setNewFileName(folder.name);
-                      setDropdownFolderId(null);
-                    }}
-                    className="block w-full text-left px-4 py-2 text-white hover:bg-neutral-600"
-                  >
-                    Rename
-                  </button>
-                  <button
-                    onClick={() => handleDelete(folder.id, true)}
-                    className="block w-full text-left px-4 py-2 text-white hover:bg-neutral-600"
-                  >
-                    Delete
-                  </button>
-                </div>
-              )}
+              <div className="absolute top-2 right-2 flex space-x-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setRenameFolderId(folder.id);
+                    setNewFileName(folder.name);
+                    setRenameFileId(null);
+                  }}
+                  className="text-neutral-400 hover:text-orange-500"
+                >
+                  <Pencil size={20} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(folder.id, true);
+                  }}
+                  className="text-neutral-400 hover:text-orange-500"
+                >
+                  <Trash2 size={20} />
+                </button>
+              </div>
               {renameFolderId === folder.id && (
                 <div className="absolute inset-0 bg-neutral-800 p-4 rounded-lg flex flex-col space-y-2">
                   <input
@@ -592,38 +535,34 @@ const Workspace = () => {
                 <Video size={40} className="text-orange-500 mx-auto mb-2" />
               )}
               <p className="text-white text-sm truncate">{file.name}</p>
-              <button
-                onClick={() => setDropdownFileId(file.id)}
-                className="absolute top-2 right-2 text-neutral-400 hover:text-orange-500"
-              >
-                <MoreVertical size={20} />
-              </button>
-              {dropdownFileId === file.id && (
-                <div className="absolute top-8 right-2 bg-neutral-700 rounded-md shadow-lg z-10">
-                  <button
-                    onClick={() => window.open(file.fileUrl, "_blank")}
-                    className="block w-full text-left px-4 py-2 text-white hover:bg-neutral-600"
-                  >
-                    Download
-                  </button>
-                  <button
-                    onClick={() => {
-                      setRenameFileId(file.id);
-                      setNewFileName(file.name);
-                      setDropdownFileId(null);
-                    }}
-                    className="block w-full text-left px-4 py-2 text-white hover:bg-neutral-600"
-                  >
-                    Rename
-                  </button>
-                  <button
-                    onClick={() => handleDelete(file.id)}
-                    className="block w-full text-left px-4 py-2 text-white hover:bg-neutral-600"
-                  >
-                    Delete
-                  </button>
-                </div>
-              )}
+              <div className="absolute top-2 right-2 flex space-x-2">
+                <button
+                  onClick={() => window.open(file.fileUrl, "_blank")}
+                  className="text-neutral-400 hover:text-orange-500"
+                >
+                  <Download size={20} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setRenameFileId(file.id);
+                    setNewFileName(file.name);
+                    setRenameFolderId(null);
+                  }}
+                  className="text-neutral-400 hover:text-orange-500"
+                >
+                  <Pencil size={20} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(file.id);
+                  }}
+                  className="text-neutral-400 hover:text-orange-500"
+                >
+                  <Trash2 size={20} />
+                </button>
+              </div>
               {renameFileId === file.id && (
                 <div className="absolute inset-0 bg-neutral-800 p-4 rounded-lg flex flex-col space-y-2">
                   <input
@@ -655,6 +594,7 @@ const Workspace = () => {
         {/* Context Menu */}
         {isContextMenuOpen && (
           <div
+            ref={contextMenuRef}
             className="absolute bg-neutral-700 rounded-md shadow-lg z-50"
             style={{ top: contextMenuPosition.y, left: contextMenuPosition.x }}
           >
