@@ -26,6 +26,7 @@ const Workspace = () => {
   const [error, setError] = useState("");
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
+  const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectedFolderId, setSelectedFolderId] = useState(null);
   const [newFolderName, setNewFolderName] = useState("");
@@ -43,6 +44,7 @@ const Workspace = () => {
   const mainRef = useRef(null);
   const fileInputRef = useRef(null);
   const contextMenuRef = useRef(null);
+  const renameModalRef = useRef(null);
 
   const endpoint = "https://cryogena-backend.onrender.com/graphql/";
   const headers = {
@@ -133,15 +135,20 @@ const Workspace = () => {
     setIsContextMenuOpen(true);
   };
 
-  // Close context menu and rename UI
+  // Close context menu and rename modal
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (contextMenuRef.current?.contains(e.target)) {
+      if (
+        contextMenuRef.current?.contains(e.target) ||
+        renameModalRef.current?.contains(e.target)
+      ) {
         return;
       }
       setIsContextMenuOpen(false);
+      setIsRenameModalOpen(false);
       setRenameFileId(null);
       setRenameFolderId(null);
+      setNewFileName("");
     };
     document.addEventListener("click", handleClickOutside);
     return () => document.removeEventListener("click", handleClickOutside);
@@ -316,6 +323,7 @@ const Workspace = () => {
         setRenameFileId(null);
         setRenameFolderId(null);
         setNewFileName("");
+        setIsRenameModalOpen(false);
         toast.success(
           isFolder ? "Folder renamed successfully" : "File renamed successfully"
         );
@@ -471,8 +479,9 @@ const Workspace = () => {
                   onClick={(e) => {
                     e.stopPropagation();
                     setRenameFolderId(folder.id);
-                    setNewFileName(folder.name);
                     setRenameFileId(null);
+                    setNewFileName(folder.name);
+                    setIsRenameModalOpen(true);
                   }}
                   className="text-neutral-400 hover:text-orange-500"
                 >
@@ -488,30 +497,6 @@ const Workspace = () => {
                   <Trash2 size={20} />
                 </button>
               </div>
-              {renameFolderId === folder.id && (
-                <div className="absolute inset-0 bg-neutral-800 p-4 rounded-lg flex flex-col space-y-2">
-                  <input
-                    type="text"
-                    value={newFileName}
-                    onChange={(e) => setNewFileName(e.target.value)}
-                    className="w-full p-2 rounded-md bg-neutral-700 text-white border border-neutral-600 focus:outline-none focus:border-orange-500"
-                  />
-                  <div className="flex justify-end space-x-2">
-                    <button
-                      onClick={() => setRenameFolderId(null)}
-                      className="py-1 px-2 bg-neutral-600 text-white rounded-md"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => handleRename(folder.id, newFileName, true)}
-                      className="py-1 px-2 bg-gradient-to-r from-orange-500 to-orange-800 text-white rounded-md"
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           ))}
           {files.map((file) => (
@@ -546,8 +531,9 @@ const Workspace = () => {
                   onClick={(e) => {
                     e.stopPropagation();
                     setRenameFileId(file.id);
-                    setNewFileName(file.name);
                     setRenameFolderId(null);
+                    setNewFileName(file.name);
+                    setIsRenameModalOpen(true);
                   }}
                   className="text-neutral-400 hover:text-orange-500"
                 >
@@ -563,30 +549,6 @@ const Workspace = () => {
                   <Trash2 size={20} />
                 </button>
               </div>
-              {renameFileId === file.id && (
-                <div className="absolute inset-0 bg-neutral-800 p-4 rounded-lg flex flex-col space-y-2">
-                  <input
-                    type="text"
-                    value={newFileName}
-                    onChange={(e) => setNewFileName(e.target.value)}
-                    className="w-full p-2 rounded-md bg-neutral-700 text-white border border-neutral-600 focus:outline-none focus:border-orange-500"
-                  />
-                  <div className="flex justify-end space-x-2">
-                    <button
-                      onClick={() => setRenameFileId(null)}
-                      className="py-1 px-2 bg-neutral-600 text-white rounded-md"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => handleRename(file.id, newFileName)}
-                      className="py-1 px-2 bg-gradient-to-r from-orange-500 to-orange-800 text-white rounded-md"
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -722,6 +684,51 @@ const Workspace = () => {
                   className="py-2 px-4 bg-gradient-to-r from-orange-500 to-orange-800 text-white rounded-md hover:from-orange-600 hover:to-orange-900"
                 >
                   Create Folder
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Rename Modal */}
+        {isRenameModalOpen && (renameFileId || renameFolderId) && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div
+              ref={renameModalRef}
+              className="bg-neutral-800 p-6 rounded-lg w-full max-w-md"
+            >
+              <h2 className="text-xl font-bold text-white mb-4">
+                {renameFileId ? "Rename File" : "Rename Folder"}
+              </h2>
+              <input
+                type="text"
+                value={newFileName}
+                onChange={(e) => setNewFileName(e.target.value)}
+                className="w-full p-2 mb-4 rounded-md bg-neutral-700 text-white border border-neutral-600 focus:outline-none focus:border-orange-500"
+              />
+              <div className="flex justify-end space-x-2">
+                <button
+                  onClick={() => {
+                    setIsRenameModalOpen(false);
+                    setRenameFileId(null);
+                    setRenameFolderId(null);
+                    setNewFileName("");
+                  }}
+                  className="py-2 px-4 bg-neutral-600 text-white rounded-md"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() =>
+                    handleRename(
+                      renameFileId || renameFolderId,
+                      newFileName,
+                      !!renameFolderId
+                    )
+                  }
+                  className="py-2 px-4 bg-gradient-to-r from-orange-500 to-orange-800 text-white rounded-md hover:from-orange-600 hover:to-orange-900"
+                >
+                  OK
                 </button>
               </div>
             </div>
