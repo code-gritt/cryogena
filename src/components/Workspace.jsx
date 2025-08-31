@@ -38,6 +38,9 @@ const Workspace = () => {
     x: 0,
     y: 0,
   });
+  const [draggedItem, setDraggedItem] = useState(null); // { type: "file"|"folder", id: string }
+  const [isDraggingOverWorkspace, setIsDraggingOverWorkspace] = useState(false);
+  const [dragOverFolderId, setDragOverFolderId] = useState(null);
   const { user, token, clearUser } = useUserStore();
   const navigate = useNavigate();
   const { folderId } = useParams();
@@ -386,6 +389,128 @@ const Workspace = () => {
     }
   };
 
+  // Move File or Folder
+  const handleMove = async (item, targetFolderId) => {
+    setLoading(true);
+    try {
+      const query =
+        item.type === "folder"
+          ? `
+            mutation ($folderId: ID!, $parentId: ID) {
+              moveFolder(folderId: $folderId, parentId: $parentId) {
+                success
+                message
+              }
+            }
+          `
+          : `
+            mutation ($fileId: ID!, $folderId: ID) {
+              moveFile(fileId: $fileId, folderId: $folderId) {
+                success
+                message
+              }
+            }
+          `;
+      const variables =
+        item.type === "folder"
+          ? { folderId: item.id, parentId: targetFolderId || null }
+          : { fileId: item.id, folderId: targetFolderId || null };
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ query, variables }),
+      });
+      const { data, errors } = await response.json();
+      if (errors) throw new Error(errors[0].message);
+      if (data[item.type === "folder" ? "moveFolder" : "moveFile"].success) {
+        if (item.type === "folder") {
+          setFolders(folders.filter((f) => f.id !== item.id));
+        } else {
+          setFiles(files.filter((f) => f.id !== item.id));
+        }
+        toast.success(
+          item.type === "folder"
+            ? "Folder moved successfully"
+            : "File moved successfully"
+        );
+      }
+    } catch (err) {
+      toast.error(
+        err.message ||
+          (item.type === "folder" ? "Folder move failed" : "File move failed")
+      );
+    } finally {
+      setLoading(false);
+      setDraggedItem(null);
+      setDragOverFolderId(null);
+      setIsDraggingOverWorkspace(false);
+    }
+  };
+
+  // Drag and Drop Handlers
+  const handleDragStart = (e, item) => {
+    setDraggedItem(item);
+    e.dataTransfer.setData("application/json", JSON.stringify(item));
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDraggingOverWorkspace(true);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setIsDraggingOverWorkspace(false);
+    setDragOverFolderId(null);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    if (e.dataTransfer.types.includes("Files")) {
+      // Handle external file drop
+      const droppedFiles = e.dataTransfer.files;
+      if (droppedFiles.length) {
+        handleUpload(droppedFiles);
+      }
+    } else if (draggedItem) {
+      // Handle internal item move to root
+      handleMove(draggedItem, null);
+    }
+    setIsDraggingOverWorkspace(false);
+    setDraggedItem(null);
+  };
+
+  const handleFolderDragOver = (e, folderId) => {
+    e.preventDefault();
+    if (
+      draggedItem &&
+      draggedItem.type === "folder" &&
+      draggedItem.id === folderId
+    ) {
+      return; // Prevent dropping folder into itself
+    }
+    setDragOverFolderId(folderId);
+  };
+
+  const handleFolderDrop = (e, folderId) => {
+    e.preventDefault();
+    if (
+      draggedItem &&
+      draggedItem.type === "folder" &&
+      draggedItem.id === folderId
+    ) {
+      toast.error("Cannot move folder into itself");
+      return;
+    }
+    if (draggedItem) {
+      handleMove(draggedItem, folderId);
+    }
+    setDragOverFolderId(null);
+    setDraggedItem(null);
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -431,7 +556,12 @@ const Workspace = () => {
       <main
         ref={mainRef}
         onContextMenu={handleContextMenu}
-        className="flex-1 p-4 md:p-8"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`flex-1 p-4 md:p-8 ${
+          isDraggingOverWorkspace ? "border-2 border-orange-500 rounded-lg" : ""
+        }`}
       >
         {/* Top Bar */}
         <div className="flex justify-between items-center mb-6">
@@ -469,7 +599,17 @@ const Workspace = () => {
           {folders.map((folder) => (
             <div
               key={folder.id}
-              className="relative bg-neutral-800 p-4 rounded-lg text-center cursor-pointer"
+              draggable
+              onDragStart={(e) =>
+                handleDragStart(e, { type: "folder", id: folder.id })
+              }
+              onDragOver={(e) => handleFolderDragOver(e, folder.id)}
+              onDrop={(e) => handleFolderDrop(e, folder.id)}
+              className={`relative bg-neutral-800 p-4 rounded-lg text-center cursor-pointer ${
+                dragOverFolderId === folder.id
+                  ? "border-2 border-orange-500"
+                  : ""
+              }`}
               onDoubleClick={() => handleFolderDoubleClick(folder.id)}
             >
               <Folder size={40} className="text-orange-500 mx-auto mb-2" />
@@ -502,6 +642,10 @@ const Workspace = () => {
           {files.map((file) => (
             <div
               key={file.id}
+              draggable
+              onDragStart={(e) =>
+                handleDragStart(e, { type: "file", id: file.id })
+              }
               className="relative bg-neutral-800 p-4 rounded-lg text-center"
             >
               {file.fileType === "image" && (

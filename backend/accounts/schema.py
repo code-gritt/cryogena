@@ -377,21 +377,6 @@ class GoogleLoginMutation(graphene.Mutation):
             raise Exception(f"Google login failed: {str(e)}")
 
 
-# Root schema
-class Mutation(graphene.ObjectType):
-    register = RegisterMutation.Field()
-    login = LoginMutation.Field()
-    google_login = GoogleLoginMutation.Field()
-    upload_file = UploadFileMutation.Field()
-    create_folder = CreateFolderMutation.Field()
-    rename_file = RenameFileMutation.Field()
-    delete_file = DeleteFileMutation.Field()
-    rename_folder = RenameFolderMutation.Field()
-    delete_folder = DeleteFolderMutation.Field()
-    delete_file_forever = DeleteFileForeverMutation.Field()
-    delete_folder_forever = DeleteFolderForeverMutation.Field()
-
-
 class Query(graphene.ObjectType):
     me = graphene.Field(UserType)
     dashboard_stats = graphene.Field(DashboardStatsType)
@@ -480,6 +465,90 @@ class Query(graphene.ObjectType):
             folders=Folder.objects.filter(
                 owner=user, is_deleted=True).order_by('-created_at')
         )
+
+# Move File Mutation
+
+
+class MoveFileMutation(graphene.Mutation):
+    class Arguments:
+        file_id = graphene.ID(required=True)
+        folder_id = graphene.ID(required=False)  # null for root
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    def mutate(self, info, file_id, folder_id=None):
+        user = info.context.user
+        if user.is_anonymous:
+            raise Exception("Not authenticated")
+
+        try:
+            file = File.objects.get(id=file_id, owner=user, is_deleted=False)
+            folder = None
+            if folder_id:
+                folder = Folder.objects.get(
+                    id=folder_id, owner=user, is_deleted=False)
+            file.folder = folder
+            file.save()
+            return MoveFileMutation(success=True, message="File moved successfully")
+        except File.DoesNotExist:
+            raise Exception("File not found")
+        except Folder.DoesNotExist:
+            raise Exception("Target folder not found")
+
+# Move Folder Mutation
+
+
+class MoveFolderMutation(graphene.Mutation):
+    class Arguments:
+        folder_id = graphene.ID(required=True)
+        parent_id = graphene.ID(required=False)  # null for root
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    def mutate(self, info, folder_id, parent_id=None):
+        user = info.context.user
+        if user.is_anonymous:
+            raise Exception("Not authenticated")
+
+        try:
+            folder = Folder.objects.get(
+                id=folder_id, owner=user, is_deleted=False)
+            new_parent = None
+            if parent_id:
+                new_parent = Folder.objects.get(
+                    id=parent_id, owner=user, is_deleted=False)
+                # Check for circular reference
+                current = new_parent
+                while current:
+                    if current.id == folder_id:
+                        raise Exception(
+                            "Cannot move folder into itself or its descendants")
+                    current = current.parent
+            folder.parent = new_parent
+            folder.save()
+            return MoveFolderMutation(success=True, message="Folder moved successfully")
+        except Folder.DoesNotExist:
+            raise Exception("Folder or target parent not found")
+
+# Update Mutation class
+
+
+class Mutation(graphene.ObjectType):
+    register = RegisterMutation.Field()
+    login = LoginMutation.Field()
+    google_login = GoogleLoginMutation.Field()
+    upload_file = UploadFileMutation.Field()
+    create_folder = CreateFolderMutation.Field()
+    rename_file = RenameFileMutation.Field()
+    delete_file = DeleteFileMutation.Field()
+    rename_folder = RenameFolderMutation.Field()
+    delete_folder = DeleteFolderMutation.Field()
+    delete_file_forever = DeleteFileForeverMutation.Field()
+    delete_folder_forever = DeleteFolderForeverMutation.Field()
+    move_file = MoveFileMutation.Field()
+    move_folder = MoveFolderMutation.Field()
 
 
 schema = graphene.Schema(query=Query, mutation=Mutation)
